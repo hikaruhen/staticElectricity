@@ -1,1 +1,18 @@
-# staticElectricity
+# 電荷實驗室
+
+國中自然數位互動教具，兩個模式：
+- 靜電：拖曳氣球摩擦毛衣、電子轉移、同性排斥、中性牆面極化吸引。
+- 庫倫定律：拖曳點電荷改變距離，調整正負電量，等大反向力箭頭與即時讀值。
+
+純 HTML / CSS / JavaScript，無需建置。以靜態伺服器開啟 index.html。
+
+## 教材與模型
+課程參考：05-115國中自然3上備課ch4-理化.pdf，4-1（課本頁92–97）。本儲存庫不散布原教材。
+互動參考：https://phet.colorado.edu/zh_TW/simulations/balloons-and-static-electricity
+原創圖像與程式，無嵌入或複製 PhET 程式。
+
+靜電採定性運動模型，非真實時間與軌跡。每格電荷為示意單位，摩擦轉移上限每球8格，總電荷守恆。
+庫倫模式為真空點電荷模型，k=8.99e9 N·m²/C²，電量 μC、中心距離 m。箭頭同尺度，高值截短並標示；球受約束供觀察，不自動飛走。
+
+## 部署
+GitHub Pages Actions 工作流程部署根目錄的 index.html、style.css、app.js。其他教材與驗收檔不進入網站產物。
