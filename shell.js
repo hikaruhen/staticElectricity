@@ -1,7 +1,7 @@
 'use strict';
 // Full-viewport by default; native fullscreen is requested only from a click.
 const fsButton=$('fullscreen'),screenStatus=$('screenStatus'),help=$('principles'),helpButton=$('helpToggle');
-let firstModeClick=true,statusTimer=null,returnFocus=null,landscapeLockHeld=false;
+let statusTimer=null,returnFocus=null,landscapeLockHeld=false;
 function fullElement(){return document.fullscreenElement||document.webkitFullscreenElement;}
 function announceScreen(message){screenStatus.textContent=message;screenStatus.dataset.visible='true';clearTimeout(statusTimer);statusTimer=setTimeout(()=>{screenStatus.dataset.visible='false';},5000);}
 function updateLayout(){
@@ -25,18 +25,13 @@ async function enterScreen(){
  catch{announceScreen('瀏覽器未允許全螢幕；目前維持滿版。可再點「全螢幕」嘗試。');updateScreen();}
 }
 fsButton.addEventListener('click',async()=>{
- firstModeClick=false;
  if(fullElement()){
   const exit=document.exitFullscreen||document.webkitExitFullscreen;
   try{if(exit)await exit.call(document);}catch{announceScreen('無法退出全螢幕，請使用瀏覽器的退出方式。');}
  }else await enterScreen();
  updateScreen();
 });
-// Never request fullscreen on pointerdown/move: the first drag must remain a drag.
-document.querySelector('nav').addEventListener('click',e=>{
- if(!e.isTrusted||!e.target.closest('button')||!firstModeClick)return;
- firstModeClick=false;void enterScreen();
-},true);
+// Mode selection never requests fullscreen or orientation changes.
 document.addEventListener('fullscreenchange',updateScreen);
 document.addEventListener('webkitfullscreenchange',updateScreen);
 document.addEventListener('fullscreenerror',()=>announceScreen('瀏覽器未允許全螢幕，目前仍可使用滿版教具。'));
@@ -108,7 +103,6 @@ document.addEventListener('pointerup',e=>{
  const hit=document.elementFromPoint(e.clientX,e.clientY)?.closest('button,summary');
  if(press.moved||hit!==press.button||press.button.disabled)return;
  e.preventDefault();lastTouchButton={button:press.button,id:press.button.id,time:performance.now()};
- if(press.button.closest('nav')&&firstModeClick){firstModeClick=false;void enterScreen();}
  press.button.click();
 },true);
 document.addEventListener('pointercancel',()=>{touchButtonPress=null;},true);
