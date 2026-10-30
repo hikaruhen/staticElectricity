@@ -250,7 +250,7 @@ function removeObject(uid){
 function startTray(e,id){
  if(e.button!==0||state.mode==='quiz')return;
  trayDrag={id,charge:id==='ball'?ballSetting:0,pointer:e.pointerId};e.currentTarget.setPointerCapture(e.pointerId);e.preventDefault();document.body.classList.add('placingMaterial');
- materialGhost=html('div',{class:'materialGhost'});const icon=el('svg',{viewBox:'-110 -85 220 180'});drawShape(icon,kind(id));materialGhost.append(icon,document.createTextNode(kind(id).name));materialGhost.style.left=e.clientX+'px';materialGhost.style.top=e.clientY+'px';document.body.append(materialGhost);
+ materialGhost=html('div',{class:'materialGhost'});const icon=el('svg',{viewBox:'-110 -85 220 180'});drawShape(icon,kind(id));materialGhost.append(icon,document.createTextNode(kind(id).name));materialGhost.style.left=e.clientX+'px';materialGhost.style.top=e.clientY+'px';document.documentElement.append(materialGhost);
 }
 function clearTray(){trayDrag=null;materialGhost?.remove();materialGhost=null;document.body.classList.remove('placingMaterial');}
 document.addEventListener('pointermove',e=>{if(materialGhost){materialGhost.style.left=e.clientX+'px';materialGhost.style.top=e.clientY+'px';}});
