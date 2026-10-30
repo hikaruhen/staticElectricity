@@ -10,7 +10,7 @@ const kind=id=>id==='ball'?ballKind:matter.find(m=>m.id===id);
 const EPS=1e-7,benchModes=['materials','induction','quiz'];
 const bench={objects:[],electrons:12,earth:0,ground:false,cable:{x:0,y:0},drag:null,flight:null,next:1,travel:0,contact:null,removedCharge:0,importedCharge:0,message:'',width:900,selected:null,events:[],quiz:null};
 const ionSlots=Array.from({length:12},(_,i)=>({x:(i%4-1.5)*39,y:(Math.floor(i/4)-1)*38}));
-let ballSetting=6,quizTask='contact',trayDrag=null,materialGhost=null;
+let ballSetting=6,quizTask='contact',quizSign=1,trayDrag=null,materialGhost=null;
 const previousMode=switchMode,previousReset=reset;
 function benchSize(){bench.width=900;return bench.width;}
 function scaleBench(){return bench.width<600?.7:1;}
@@ -63,7 +63,7 @@ function addObject(id,x,y,charge=0){
 function initBench(){
  benchSize();Object.assign(bench,{objects:[],electrons:12,earth:0,ground:false,cable:earthPoint(),drag:null,flight:null,selected:null,travel:0,contact:null,removedCharge:0,importedCharge:0,message:'',events:[],quiz:null});
  if(state.mode==='quiz'){
-  bench.quiz={task:quizTask,source:null,initialCharge:quizTask==='contact'?6:-6,flags:{},invalid:'',passed:false,feedback:'尚未檢查。請直接操作指定帶電球與目標球。'};
+  bench.quiz={task:quizTask,source:null,initialCharge:quizSign*6,flags:{},invalid:'',passed:false,feedback:'尚未檢查。請直接操作指定帶電球與目標球。'};
   const o=addObject('ball',bench.width<600?80:170,135,bench.quiz.initialCharge);bench.quiz.source=o.uid;
  }
 }
@@ -83,8 +83,14 @@ function buildBenchControls(){
  if(state.mode==='quiz'){
   const l=html('label',{for:'quizTask'},'選擇任務'),select=html('select',{id:'quizTask'});
   for(const [value,text]of [['contact','接觸起電'],['induction','感應起電']])select.add(new Option(text,value));
-  select.value=quizTask;select.onchange=()=>{quizTask=select.value;reset();};c.append(l,select);
-  const instruction=html('p',{id:'quizGoal',class:'quizGoal'},quizTask==='contact'?'目標：用指定 ＋6 格帶電球接觸原本中性的目標球，等分享完成後移開；兩球各留下 ＋3 格。不要接地。':'目標：用指定 −6 格帶電球，讓原本中性的目標球不經接觸而留下正電。先靠近、接地、等轉移完成，再斷地、移開帶電球。');
+  select.value=quizTask;select.onchange=()=>{quizTask=select.value;quizSign=quizTask==='contact'?1:-1;reset();};c.append(l,select);
+  const polarity=html('div',{class:'quizPolarity',role:'group','aria-label':'測驗來源球電性'});
+  for(const [value,id,label] of [[1,'quizPositive','正電球 ＋6'],[-1,'quizNegative','負電球 −6']]){
+   const button=html('button',{id,'aria-pressed':String(quizSign===value)},label);button.onclick=()=>{if(quizSign!==value){quizSign=value;reset();}};polarity.append(button);
+  }
+  c.append(html('p',{class:'note'},'來源球電性（切換會開始新題）'),polarity);
+  const initial=bench.quiz.initialCharge,targetSign=initial>0?'負':'正';
+  const instruction=html('p',{id:'quizGoal',class:'quizGoal'},quizTask==='contact'?`目標：用指定 ${chargeLabel(initial)} 帶電球接觸原本中性的目標球，等分享完成後移開；兩球各留下 ${chargeLabel(initial/2)}。不要接地。`:`目標：用指定 ${chargeLabel(initial)} 帶電球，讓原本中性的目標球不經接觸而留下${targetSign}電。先靠近、接地、等轉移完成，再斷地、移開帶電球。`);
   c.append(instruction,html('p',{class:'note'},'指定球原本已帶電；得分對象是固定的中性目標球。沒有新增帶電球入口，不能以預設電量替代操作。'));
   const check=html('button',{id:'checkQuiz',class:'primary'},'檢查操作結果');check.onclick=checkQuiz;
   const retry=html('button',{id:'retryQuiz'},'重新挑戰本題');retry.onclick=()=>reset();
@@ -171,6 +177,9 @@ function renderBench(){
  $('exploreHint').textContent=state.mode==='quiz'?'直接拖動指定帶電球與接地夾，再按「檢查操作結果」':induction?'拖入物品，自由決定靠近、接觸、接地與斷地的順序':'從材料架拖入物品，兩物接觸並來回摩擦';
  if(induction){
   const s=sphere(),end=terminal(),earth=earthPoint();svg.append(el('rect',{x:s.x-18,y:s.y+s.r-5,width:36,height:100,fill:'#bac8bf'}),el('circle',{cx:s.x,cy:s.y,r:s.r,fill:'#dae7e5',stroke:'#638783','stroke-width':3,'data-target-sphere':true}),el('text',{x:s.x-(bench.width<600?45:0),y:485,class:'benchLabel'},'目標金屬球 · 絕緣支架'));
+  const net=12-bench.electrons,polarity=Math.abs(net)<EPS?'neutral':net>0?'positive':'negative',color=polarity==='neutral'?'#355d59':net>0?'#c63e36':'#176bb5';
+  const badge=el('g',{'data-target-charge':Number(net.toFixed(4)),'data-polarity':polarity,role:'img','aria-label':`絕緣支架上的金屬導體球，淨電荷${chargeLabel(net)}`});
+  badge.append(el('rect',{x:s.x-130,y:64,width:260,height:64,rx:12,fill:'#fffdf6',stroke:color,'stroke-width':2}),el('text',{x:s.x,y:86,'text-anchor':'middle','font-size':17,fill:'#355d59'},'目標金屬球 · 淨電荷'),el('text',{x:s.x,y:113,'text-anchor':'middle','font-size':26,'font-weight':700,fill:color},polarity==='neutral'?'中性 · 0 格':`${net>0?'正':'負'}電 · ${chargeLabel(net)}`));svg.append(badge);
   if(state.show){ionSlots.forEach((p,i)=>chargeText(svg,s.x+p.x*s.r/105,s.y+p.y*s.r/100,true,{'data-sphere-ion':i}));const hide=bench.flight?.from==='sphere'?(bench.flight.amount||1):0;electronPositions().forEach((p,i)=>{if(i<bench.electrons-hide){const mark=chargeText(svg,p.x,p.y,false,{'data-sphere-electron':i,opacity:Math.min(1,bench.electrons-hide-i)});mark.querySelector('circle').setAttribute('r',7);mark.querySelector('text').style.fontSize='12px';}});}
   const cable=bench.ground?end:bench.cable;svg.append(el('path',{d:`M${earth.x} ${earth.y}Q${earth.x-100} ${earth.y-20} ${cable.x} ${cable.y}`,fill:'none',stroke:'#368069','stroke-width':7}),el('path',{d:`M${earth.x} ${earth.y}v17m-25 0h50m-18 10h28m-20 10h12`,stroke:'#368069','stroke-width':4,fill:'none'}),el('text',{x:earth.x-5,y:505,class:'benchLabel'},'大地'));
   svg.append(el('circle',{cx:end.x,cy:end.y,r:15,fill:'#fff',stroke:'#368069','stroke-width':4,'data-terminal':true}));
@@ -320,13 +329,13 @@ function checkQuiz(){
  if(!problem&&q.task==='contact'){
   if(!flags.contact||!flags.transferred||!flags.settled)problem='還沒有完成接觸與電荷分享。請將指定球碰到目標球，等待轉移停止。';
   else if(contactNow(source)||!sourceFar())problem='電荷已分享，請把帶電球移遠，再檢查結果。';
-  else if(Math.abs(sq-3)>EPS||Math.abs(objectCharge(source)-3)>EPS)problem='兩球尚未各保留 ＋3 格。請重新挑戰，勿接地或改變指定物品。';
+  else if(Math.abs(sq-q.initialCharge/2)>EPS||Math.abs(objectCharge(source)-q.initialCharge/2)>EPS)problem=`兩球尚未各保留 ${chargeLabel(q.initialCharge/2)}。請重新挑戰，勿接地或改變指定物品。`;
  }else if(!problem){
   if(!flags.near||!flags.grounded||!flags.exchange||!flags.disconnected||!flags.far)problem='還沒有完成「靠近 → 接地並轉移 → 先斷地 → 移開」的有效過程。只靠近造成極化不算起電。';
-  else if(!sourceFar()||sq<=EPS||Math.abs(objectCharge(source)+6)>EPS||Math.abs(sq+bench.earth)>EPS)problem='請確認帶電球已移遠，目標球留下正電，且來源球電量維持 −6 格。';
+  else if(!sourceFar()||sq*q.initialCharge>=-EPS||Math.abs(objectCharge(source)-q.initialCharge)>EPS||Math.abs(sq+bench.earth)>EPS)problem=`請確認來源球已移遠，目標球留下${q.initialCharge>0?'負':'正'}電，且來源電量維持 ${chargeLabel(q.initialCharge)}。`;
  }
  if(!problem&&Math.abs(systemCharge()-bench.importedCharge)>EPS)problem='電荷總量不一致，請重試本題。';
- q.passed=!problem;q.feedback=problem||(q.task==='contact'?'完成！你透過實際接觸轉移電子，再分開兩球；兩球各留下 ＋3 格。':'完成！未經接觸，你讓電子經大地交換，先斷地再移開來源，目標球留下正電。');updateQuizUI();
+ q.passed=!problem;q.feedback=problem||(q.task==='contact'?`完成！你透過實際接觸轉移電子，再分開兩球；兩球各留下 ${chargeLabel(q.initialCharge/2)}。`:`完成！未經接觸，先斷地再移開來源，目標球留下 ${chargeLabel(sq)}；來源仍為 ${chargeLabel(q.initialCharge)}。`);updateQuizUI();
 }
 function updateQuizUI(){
  if(state.mode!=='quiz'||!bench.quiz||!$('quizSteps'))return;

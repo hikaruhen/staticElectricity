@@ -1,13 +1,13 @@
-# 電荷實驗室 v6.1
+# 電荷實驗室 v6.2
 
-正式網址：https://hikaruhen.github.io/staticElectricity/
+正式網站：https://hikaruhen.github.io/staticElectricity/
 
-手機／平板直向觸控開啟即呈現旋轉90度的橫向工作區，轉持裝置後正常顯示。支援時在原生fullscreen後嘗試鎖定landscape；不支援時由CSS呈現橫向stage。電腦側欄保持正常朝向，stage依約19:10比例適配。畫布與工具固定左右配置，沒有portrait上下堆疊。
+- 氣球／毛衣電子逐顆序列轉移，抵達才更新氣球電量。
+- 庫倫力以粗紅箭身與醒目頭部顯示，保留力的方向、大小讀值、比較與截短提示。
+- 接觸與感應實作測驗均可選正／負來源球，評分依實際操作過程與最終狀態。
+- 絕緣支架上的目標金屬導體球旁即時顯示中性／正負與淨電量。
 
-模式：靜電、摩擦起電、自由操作起電、庫倫定律、測驗模式。
-Fullscreen或裝置轉向保留物品、電量、接地、進行中的轉移與測驗紀錄。
-
-純HTML/CSS/JavaScript。網站僅含index.html、style.css、app.js、explore.js、workbench.js、shell.js。
-模型為教學示意，非完整電場或真實暫態求解。塑膠採乾燥聚乙烯假設。導電球採相同有效容量，絕緣材質僅示意局部接觸轉移。
-課程參考：05-115國中自然3上備課ch4-理化，第4-1節。教材、私有QA與備份不在網站產物中。
+保留手機直向的旋轉橫向stage與真觸控操作；電腦窄窗正常朝向。Fullscreen與轉向保留模型與測驗狀態。
+網站僅index.html、style.css、app.js、explore.js、workbench.js、shell.js；教材、私有QA、備份不在產物中。模型、動畫速度與符號數量為教學示意，非完整實物數值求解。
+課程參考：05-115國中自然3上備課ch4-理化，第4-1節。
 互動參考：https://phet.colorado.edu/zh_TW/simulations/balloons-and-static-electricity
