@@ -23,11 +23,12 @@ jobs:
           node --check app.js
           node --check explore.js
           node --check workbench.js
+          node --check shell.js
       - uses: actions/configure-pages@v5
       - name: Prepare static files
         run: |
           mkdir public
-          cp index.html style.css app.js explore.js workbench.js public/
+          cp index.html style.css app.js explore.js workbench.js shell.js public/
       - uses: actions/upload-pages-artifact@v3
         with:
           path: public
