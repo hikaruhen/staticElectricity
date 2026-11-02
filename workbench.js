@@ -75,6 +75,7 @@ switchMode=function(mode){
  }
 };
 reset=function(){if(benchModes.includes(state.mode)){clearTray();initBench();buildBenchControls();renderBench();}else previousReset();};
+$('resetBench').onclick=()=>reset();
 function html(tag,attrs={},text=''){const e=document.createElement(tag);for(const[k,v]of Object.entries(attrs)){if(k==='class')e.className=v;else e.setAttribute(k,v);}e.textContent=text;return e;}
 function buildBenchControls(){
  $('materialTray')?.remove();$('sourceControls')?.remove();

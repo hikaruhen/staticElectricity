@@ -7,7 +7,7 @@ switchMode=function(mode){
  const extra=['materials','induction','quiz'].includes(mode);
  for(const name of ['static','coulomb']){$(name+'Scene').hidden=mode!==name;$(name+'Controls').hidden=mode!==name;}
  $('exploreScene').hidden=!extra;$('exploreControls').hidden=!extra;
- $('charges').parentElement.hidden=mode==='coulomb';$('calculateForce').hidden=mode!=='coulomb';
+ $('charges').parentElement.hidden=mode==='coulomb';$('calculateForce').hidden=mode!=='coulomb';$('resetBench').hidden=!['materials','induction'].includes(mode);
  for(const name of ['static','materials','induction','coulomb','quiz']){const tab=$(name+'Tab');tab.classList.toggle('active',mode===name);tab.setAttribute('aria-selected',mode===name);}
 };
 reset=function(){baseReset();if(state.mode==='coulomb'){lab.baseline={r:2,q1:2,q2:-2};renderCoulomb();}};
