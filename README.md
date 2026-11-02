@@ -1,13 +1,14 @@
-# 電荷實驗室 v6.3
+# 電荷實驗室 v6.4
 
-正式網站：https://hikaruhen.github.io/staticElectricity/
+國中自然互動教具：靜電與庫倫定律。
 
-- 選模式不再自動進入fullscreen或鎖定方向。只有明確按全螢幕按鈕才請求；初始橫向stage保留。
-- 毛衣／氣球電子約0.28秒一顆，只有實際接觸摩擦才轉移，不積欠queue。分離立即取消未完成轉移並回復電荷，不跨空氣追球。
-- 接觸停著不會持續生電子；隱藏、換模式或重設取消未完成的一顆，恢復後需再摩擦。
+直接操作：https://hikaruhen.github.io/staticElectricity/
 
-保留紅粗庫倫力、正負實作測驗、目標金屬導體球旁的淨電量，以及旋轉觸控與轉向狀態保存。
-模式：靜電、摩擦起電、自由操作起電、庫倫定律、測驗模式。
-網站僅index.html、style.css、app.js、explore.js、workbench.js、shell.js。教材、私有QA、備份不在產物中；動畫及物理數量為教學示意。
-課程參考：05-115國中自然3上備課ch4-理化，第4-1節。
-互動參考：https://phet.colorado.edu/zh_TW/simulations/balloons-and-static-electricity
+- 摩擦氣球、觀察負電氣球吸引中性氣球，以及同號排斥。正背景固定，中性橡膠氣球只有束縛電子局部微偏移；氣球、毛衣可個別刪除，重設復原。
+- 材質摩擦、金屬球感應接地與操作型測驗。
+- 庫倫定律拖動電荷、調整距離及電量，分別比較距離平方反比、電荷乘積與合併力倍率，明示相吸/相斥/無作用力。
+- 桌機滑鼠與觸控操作；模式切換不自動全螢幕。
+
+靜電運動、束縛電子位移及標記是定性教學示意，非真實軌跡。庫倫數值採真空點電荷模型。各原理、限制及來源在教具「原理」內說明。
+
+課程參考：《05-115國中自然3上備課ch4-理化》。互動參考[PhET](https://phet.colorado.edu/zh_TW/simulations/balloons-and-static-electricity)，原創程式與圖像。

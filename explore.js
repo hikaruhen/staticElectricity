@@ -12,12 +12,15 @@ switchMode=function(mode){
 };
 reset=function(){baseReset();if(state.mode==='coulomb'){lab.baseline={r:2,q1:2,q2:-2};renderCoulomb();}};
 renderCoulomb=function(){
- baseCoulomb();const b=lab.baseline,base=force(b.q1,b.q2,b.r),now=force(state.q1,state.q2,state.r),max=Math.max(base,now,1e-12),ratio=base?now/base:0;
+ baseCoulomb();const b=lab.baseline,base=force(b.q1,b.q2,b.r),now=force(state.q1,state.q2,state.r),max=Math.max(base,now,1e-12);
+ const distance=state.r/b.r,distanceEffect=1/(distance*distance),product=Math.abs(state.q1*state.q2),baseProduct=Math.abs(b.q1*b.q2),productEffect=baseProduct?product/baseProduct:null,ratio=base?now/base:null;
+ const fmt=n=>n.toFixed(3),distanceText=`距離 ${distance.toFixed(2)} 倍 → 力 ${fmt(distanceEffect)} 倍`,productText=productEffect===null?'電荷乘積基準為 0：無倍率':`電荷乘積大小 ${productEffect.toFixed(2)} 倍 → 力 ${fmt(productEffect)} 倍`,combined=ratio===null?'基準力為 0，請重新取非零基準':`兩項合併 → 力 ${fmt(ratio)} 倍`;
  $('baseBar').style.width=100*base/max+'%';$('nowBar').style.width=100*now/max+'%';
- $('ratioRead').textContent=base?`距離：${(state.r/b.r).toFixed(2)} 倍｜電力：${ratio.toFixed(3)} 倍${Math.abs(ratio-.25)<.0001?'（¼）':''}${Math.abs(ratio-4)<.0001?'（4 倍）':''}`:'基準力為零，請設定非零電量後重新取基準。';
- $('canvasCompare')?.remove();const g=el('g',{id:'canvasCompare'});
- g.append(el('text',{x:22,y:28,'font-size':16,fill:'#355d59'},base?`距離 ${(state.r/b.r).toFixed(2)} 倍 → 力 ${(now/base).toFixed(3)} 倍`:'基準力為零：請重新設定基準'));
- for(const [i,value] of [base,now].entries()){g.append(el('text',{x:22,y:54+i*25,'font-size':14,fill:'#355d59'},i?'現在':'基準'),el('rect',{x:66,y:42+i*25,width:250*value/max,height:15,rx:3,fill:i?'#dd9362':'#7faca5'}));}
+ $('ratioRead').textContent=distanceText+'（電量固定）\n'+productText+'（距離固定）\n'+combined;
+ $('canvasCompare')?.remove();const g=el('g',{id:'canvasCompare'}),mobile=innerWidth<=720,size=mobile?23:30;
+ for(const[id,text,y]of [['distanceEffect',distanceText,35],['productEffect',productText,74],['combinedEffect',combined,110]])g.append(el('text',{id,x:22,y,'font-size':id==='combinedEffect'?size-5:size,'font-weight':id==='combinedEffect'?500:700,fill:'#355d59'},text));
+ const relation=state.q1*state.q2===0?'無作用力':state.q1*state.q2<0?'異號相吸':'同號相斥';
+ g.append(el('text',{id:'canvasRelation',x:mobile?225:450,y:475,'text-anchor':'middle','font-size':mobile?26:32,'font-weight':700,fill:state.q1*state.q2===0?'#65796f':'#b1342d'},relation));
  $('coulombSvg').append(g);
 };
 for(const [i,name] of ['static','materials','induction','coulomb','quiz'].entries()){const tab=$(name+'Tab');tab.firstChild.textContent='0'+(i+1)+' ';document.querySelector('nav').append(tab);tab.onclick=()=>switchMode(name);}
