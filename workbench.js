@@ -72,7 +72,7 @@ function initBench(){
  }
 }
 switchMode=function(mode){
- const old=state.mode;if(old==='induction'&&old!==mode){for(const c of freeConductors())c.internal=null;document.querySelectorAll('[data-internal-electron]').forEach(e=>e.remove());}clearTray();bench.drag=null;bench.flight=null;previousMode(mode);
+ const old=state.mode;if(old==='induction'&&old!==mode){for(const c of freeConductors())cancelScopeInternal(c);document.querySelectorAll('[data-internal-electron]').forEach(e=>e.remove());}if(old==='induction'&&bench.flight)cancelFreeFlight();clearTray();bench.drag=null;bench.flight=null;previousMode(mode);
  if(benchModes.includes(mode)){
   if(old!==mode)initBench();
   buildBenchControls();renderBench();
@@ -119,7 +119,7 @@ function buildBenchControls(){
   c.append(html('p',{class:'note'},state.mode==='materials'?'三種材質各自拖入，接觸後來回摩擦。塑膠在此假設為乾燥聚乙烯表面；摩擦序列只作教學示意。':'自行摩擦材質，或拖入外部已帶電的導電球。靠近、接觸目標球；拖動綠夾接地或斷地。＋背景固定，只有 − 轉移。'));
  }
  const remove=html('button',{id:'removeSelected'},'刪除選取物品');remove.onclick=()=>removeObject(bench.selected);
- c.append(remove,html('div',{id:'benchRead',class:'benchRead','aria-live':'polite'}),html('p',{class:'note'},'紅色＋固定正電背景；藍色−為代表性電子標記。每格代表大量電荷，分數格不是半顆電子。帶電球內每個固定符號代表 2 格；移動標記另標示轉移量。兩顆導電球採相同有效容量；絕緣材質僅示意局部接觸轉移。'));
+ c.append(remove,html('div',{id:'benchRead',class:'benchRead','aria-live':'polite'}),html('p',{class:'note'},'紅色＋是固定正電背景，藍色−是電子分布示意。每格代表大量電荷；物件淨電荷及外部交換採整數格，每次轉移 1 格。內部標記只表示重新分布，不另增加電荷。'));
 }
 function makeTile(m){
  const tile=html('div',{class:'materialTile',tabindex:0,role:'button','aria-label':`拖入${m.name}；Enter 放到桌面`});
@@ -146,12 +146,12 @@ function drawObject(o){
  const m=kind(o.id),g=el('g',{transform:`translate(${o.x} ${o.y}) scale(${scaleBench()})`,'data-object':o.uid,'data-kind':o.id,tabindex:0,role:'button','aria-label':`${m.name}，${chargeLabel(objectCharge(o))}，拖曳或方向鍵移動`,class:'benchObject'});
  drawShape(g,m);
  if(state.show){
-  const visible=o.e-(bench.flight?.from===o?(bench.flight.amount||1):0);
+  const visible=o.e-(bench.flight?.from===o&&!bench.flight.reserved?(bench.flight.amount||1):0);
   if(o.id==='ball'){
    // Sparse, fixed positive background. Each stationary ball glyph represents two units.
    for(let i=0;i<6;i++){const a=i*Math.PI/3;chargeText(g,Math.cos(a)*45,Math.sin(a)*45,true,{'data-ion':o.uid+'-'+i,'data-charge-weight':2});}
    const slots=[[0,0],[-22.5,0],[22.5,0],[-11.25,-20],[11.25,-20],[-11.25,20],[11.25,20],[-33.75,-20],[33.75,20],[-33.75,20]];
-   for(let i=0;i<visible/2;i++){const [x,y]=slots[i];chargeText(g,x,y,false,{opacity:Math.min(1,visible/2-i),'data-charge-weight':2});}
+   for(let i=0;i<visible/2;i++){const [x,y]=slots[i];chargeText(g,x,y,false,{opacity:Math.min(1,visible/2-i),'data-charge-weight':Math.min(2,visible-i*2)});}
   }else{
    ionSlots.forEach((p,i)=>chargeText(g,p.x-6,p.y,true,{'data-ion':o.uid+'-'+i}));
    for(let i=0;i<visible;i++){const p=i<12?{x:ionSlots[i].x+9,y:ionSlots[i].y+14}:{x:i<15?-85:85,y:[-40,0,40][(i-12)%3]};chargeText(g,p.x,p.y,false,{opacity:Math.min(1,visible-i)});}
@@ -209,6 +209,7 @@ function renderBench(){
 }
 function endpoint(owner){if(owner==='sphere')return sphere();if(owner==='earth')return earthPoint();return {x:owner.x,y:owner.y};}
 function beginTransfer(from,to,reason,amount=1){
+ if(state.mode==='induction'){freeStart(from,to,reason,amount);return;}
  if(bench.flight||amount<EPS)return;bench.flight={from,to,reason,amount:Math.min(1,amount),start:performance.now(),duration:750,a:endpoint(from),b:endpoint(to)};
 }
 function flightPosition(t){
@@ -250,7 +251,7 @@ function friction(o,dist){
  }
 }
 function contactNow(o){return state.mode!=='materials'&&benchModes.includes(state.mode)&&bench.objects.includes(o)&&Math.abs(surfaceGap(o))<7&&Math.abs(o.y-sphere().y)<sphere().r*.9;}
-function cancelFlight(){if(!bench.flight||bench.flight.returning)return;const f=bench.flight;f.returnFraction=clamp((performance.now()-f.start)/f.duration,0,1);f.returning=true;f.start=performance.now();f.duration=Math.max(100,750*f.returnFraction);}
+function cancelFlight(){if(state.mode==='induction'){cancelFreeFlight();return;}if(!bench.flight||bench.flight.returning)return;const f=bench.flight;f.returnFraction=clamp((performance.now()-f.start)/f.duration,0,1);f.returning=true;f.start=performance.now();f.duration=Math.max(100,750*f.returnFraction);}
 function placeObject(o,x,y){
  if(state.mode==='induction'){placeFreeSource(o,x,y);return;}
  o.x=clamp(x,75,bench.width-75);o.y=clamp(y,105,390);
@@ -274,13 +275,13 @@ function moveObject(o,x,y){
  const previous={x:o.x,y:o.y};placeObject(o,x,y);refreshContact(o);
  if(bench.flight?.reason==='friction'&&!touchingMaterials(bench.flight.from,bench.flight.to))cancelFlight();
  friction(o,Math.hypot(o.x-previous.x,o.y-previous.y));
- if(o.uid===bench.quiz?.source)record('source-move');if(state.mode==='induction'&&bench.flight&&!freeFlightValid(bench.flight))bench.flight=null;renderBench();
+ if(o.uid===bench.quiz?.source)record('source-move');if(state.mode==='induction'&&bench.flight&&!freeFlightValid(bench.flight))cancelFreeFlight();renderBench();
 }
 function removeObject(uid){
  if(state.mode==='induction'&&uid==='earth'){removeFreeEarth();return;}
  if(state.mode==='induction'&&String(uid).startsWith('conductor:')){removeFreeConductor(String(uid).slice(10));return;}
  const o=bench.objects.find(o=>o.uid===uid);if(!o)return;
- if(bench.flight&&(bench.flight.from===o||bench.flight.to===o))bench.flight=null;
+ if(bench.flight&&(bench.flight.from===o||bench.flight.to===o)){if(state.mode==='induction')cancelFreeFlight();else bench.flight=null;}
  if(state.mode==='induction')for(const[key,c]of bench.free.contacts)if(c.a===o||c.b===o)bench.free.contacts.delete(key);
  if(bench.contact?.object===o)bench.contact=null;if(bench.drag?.o===o)bench.drag=null;
  bench.removedCharge+=objectCharge(o);bench.objects=bench.objects.filter(v=>v!==o);bench.selected=null;record('remove',{uid});
@@ -412,11 +413,19 @@ function freeField(c){
  let p=0;for(const o of [...bench.objects,...freeConductors()]){if(o===c)continue;const q=freeOwnerCharge(o),coupling=clamp((155-freeGap(c,o))/180,0,.85);p+=q*coupling;}
  return clamp(p,-8,8);
 }
+function integerCharge(value){return Math.sign(value)*Math.floor(Math.abs(value)+.5+1e-9);}
+function integerContactTarget(a,b){
+ const total=freeCharge(a)+freeOwnerCharge(b),magnitude=Math.abs(total),ideal=magnitude*a.capacity/(a.capacity+freeCapacity(b)),base=Math.floor(ideal),fraction=ideal-base;
+ // Same owner receives a tied remainder for either sign; sum never changes.
+ const extra=fraction>.5+1e-9||(Math.abs(fraction-.5)<=1e-9&&String(a.uid).localeCompare(String(b.uid))<0);
+ return Math.sign(total)*(base+(extra?1:0));
+}
+function freeGroundTarget(c){return integerCharge(-freeField(c));}
 function freeLeafState(c){
- const q=freeCharge(c),field=freeField(c),leafCharges=c.leafCharges||[0,0],leaf=leafCharges[0]+leafCharges[1],cap=q-leaf;
+ const q=freeCharge(c),field=integerCharge(freeField(c)),leafCharges=c.leafCharges||[0,0],leaf=leafCharges[0]+leafCharges[1],cap=q-leaf;
  return{net:q,field,leaf,leafCharges:[...leafCharges],cap,targetLeaf:clamp(.45*(q+field),-10,10),angle:Math.min(52,20*Math.sqrt(Math.max(0,leafCharges[0]*leafCharges[1])))};
 }
-function freeSystemCharge(){return bench.objects.reduce((n,o)=>n+objectCharge(o),0)+freeConductors().reduce((n,c)=>n+freeCharge(c),0)+bench.earth+bench.removedCharge;}
+function freeSystemCharge(){return bench.objects.reduce((n,o)=>n+objectCharge(o),0)+freeConductors().reduce((n,c)=>n+freeCharge(c),0)+bench.earth+bench.removedCharge+(bench.flight?.reserved?-1:0);}
 function syncFreeBench(){const target=freeConductors().find(c=>c.type==='sphere');bench.electrons=target?target.e:12;bench.ground=!!freeGroundOwner();}
 function addFreeComponent(id,x,y){
  if(state.mode!=='induction')return null;
@@ -428,13 +437,13 @@ function addFreeComponent(id,x,y){
  freeConductors().push(c);bench.selected='conductor:'+c.uid;moveFreeConductor(c,c.x,c.y);bench.message='已拖入中性'+(scope?'金箔驗電器':'絕緣支架金屬球')+'，可靠近、接觸或接地。';renderFreeBench();return c;
 }
 function removeFreeEarth(){
- if(!bench.free.earth)return;if(bench.flight?.reason==='ground')bench.flight=null;
+ if(!bench.free.earth)return;if(bench.flight?.reason==='ground')cancelFreeFlight();
  bench.removedCharge+=bench.earth;bench.earth=0;bench.free.earth=null;bench.free.groundId=null;bench.ground=false;if(bench.drag?.type==='free-earth'||bench.drag?.type==='free-clip')bench.drag=null;bench.selected=null;bench.message='大地／接地線已移出，已斷地；移出電荷仍計入守恆帳。';renderFreeBench();
 }
 
 function removeFreeConductor(uid){
- const c=freeConductors().find(v=>v.uid===uid);if(!c)return;c.internal=null;
- if(bench.flight&&(bench.flight.from===c||bench.flight.to===c||bench.flight.via===c))bench.flight=null;
+ const c=freeConductors().find(v=>v.uid===uid);if(!c)return;cancelScopeInternal(c);
+ if(bench.flight&&(bench.flight.from===c||bench.flight.to===c||bench.flight.via===c))cancelFreeFlight();
  if(bench.drag?.c===c)bench.drag=null;
  if(bench.free.groundId===uid){bench.free.groundId=null;bench.cable=earthPoint();}
  bench.removedCharge+=freeCharge(c);bench.free.conductors=freeConductors().filter(v=>v!==c);for(const[key,contact]of bench.free.contacts)if(contact.a===c||contact.b===c)bench.free.contacts.delete(key);bench.contact=null;bench.selected=null;
@@ -451,15 +460,20 @@ function moveFreeConductor(c,x,y){
  // Solid metal heads cannot pass through other heads or source objects.
  for(let pass=0;pass<3;pass++)for(const o of [...bench.objects,...freeConductors()]){if(o===c)continue;const gap=freeGap(c,o);if(gap>=0)continue;const ox=c.x,oy=c.y;c.x+=.1;const gx=(freeGap(c,o)-gap)/.1;c.x=ox;c.y+=.1;const gy=(freeGap(c,o)-gap)/.1;c.y=oy;const norm=Math.hypot(gx,gy)||1;c.x-=gx/norm*gap;c.y-=gy/norm*gap;}
  c.x=clamp(c.x,c.type==='sphere'?120:90,c.type==='sphere'?780:810);c.y=clamp(c.y,c.type==='sphere'?155:180,c.type==='sphere'?315:300);
- if(bench.flight&&!freeFlightValid(bench.flight))bench.flight=null;bench.message='';renderFreeBench();
+ if(bench.flight&&!freeFlightValid(bench.flight))cancelFreeFlight();bench.message='';renderFreeBench();
 }
 function freePairs(){
  const list=[];for(const c of freeConductors())for(const o of bench.objects)if(freeTouch(c,o))list.push({a:c,b:o});
  const cs=freeConductors();for(let i=0;i<cs.length;i++)for(let j=i+1;j<cs.length;j++)if(freeTouch(cs[i],cs[j]))list.push({a:cs[i],b:cs[j]});
  return list;
 }
+function changeFreeElectrons(owner,delta){if(owner==='earth')bench.earth-=delta;else owner.e+=delta;}
+function cancelFreeFlight(){const f=bench.flight;if(!f)return;if(f.reserved)changeFreeElectrons(f.from,1);bench.flight=null;}
 function freeStart(from,to,reason,amount,via=null){
- if(bench.flight||amount<EPS)return;bench.flight={from,to,reason,amount:Math.min(1,amount),start:performance.now(),duration:500,free:true,via,id:bench.free.externalNext++};
+ if(bench.flight||amount<1-EPS)return;
+ const ownerBefore=via?freeCharge(via):null;
+ changeFreeElectrons(from,-1);
+ bench.flight={from,to,reason,amount:1,start:performance.now(),duration:500,free:true,reserved:true,transit:-1,via,ownerBefore,id:bench.free.externalNext++};
 }
 function freeFlightPosition(t){
  const f=bench.flight,p=clamp((t-f.start)/f.duration,0,1);
@@ -473,7 +487,7 @@ function freeFlightValid(f){
  if(f.from!=='earth'&&!bench.objects.includes(f.from)&&!freeConductors().includes(f.from))return false;
  if(f.to!=='earth'&&!bench.objects.includes(f.to)&&!freeConductors().includes(f.to))return false;
  if(f.reason==='ground'){
-  if(freeGroundOwner()!==f.via)return false;const delta=-freeField(f.via)-freeCharge(f.via);
+  if(freeGroundOwner()!==f.via)return false;const delta=freeGroundTarget(f.via)-f.ownerBefore;
   return Math.abs(delta)>EPS&&((delta>0)===(f.from===f.via));
  }
  if(f.reason==='friction')return bench.objects.includes(f.from)&&bench.objects.includes(f.to)&&touchingMaterials(f.from,f.to);
@@ -488,13 +502,13 @@ function freeTick(t){
   bench.flight.free=true;bench.flight.id=bench.free.externalNext++;
  }
  if(bench.flight){const f=bench.flight;
-  if(!freeFlightValid(f)){bench.flight=null;renderFreeBench();}
+  if(!freeFlightValid(f)){cancelFreeFlight();renderFreeBench();}
   else if(t-f.start>=f.duration){
-   const change=(o,d)=>{if(o==='earth')bench.earth-=d;else o.e+=d;};change(f.from,-f.amount);change(f.to,f.amount);bench.flight=null;syncFreeBench();renderFreeBench();
+   changeFreeElectrons(f.to,1);bench.flight=null;syncFreeBench();renderFreeBench();
   }else if(state.show){const pos=freeFlightPosition(t);$('singleElectron')?.setAttribute('transform',`translate(${pos.x} ${pos.y})`);}
  }
  if(bench.flight)return;
- const ground=freeGroundOwner();if(ground){const delta=-freeField(ground)-freeCharge(ground);
+ const ground=freeGroundOwner();if(ground){const delta=freeGroundTarget(ground)-freeCharge(ground);
   if(Math.abs(delta)>EPS){freeStart(delta>0?ground:'earth',delta>0?'earth':ground,'ground',Math.abs(delta),ground);renderFreeBench();return;}
  }
  bench.contact=null;
@@ -502,11 +516,11 @@ function freeTick(t){
   const key=a.uid+':'+b.uid;let contact=bench.free.contacts.get(key);
   if(!contact){
    const qa=freeCharge(a),qb=freeOwnerCharge(b),conductor=b.base!==undefined||b.id==='ball';
-   const target=conductor?(qa+qb)*a.capacity/(a.capacity+freeCapacity(b)):qa+qb*.25;
+   const target=conductor?integerContactTarget(a,b):qa+Math.sign(qb)*Math.min(Math.abs(qb),Math.max(1,integerCharge(Math.abs(qb)/4)));
    contact={a,b,target,settled:false};bench.free.contacts.set(key,contact);
   }
   bench.contact=contact;
-  if(b.base!==undefined||b.id==='ball')contact.target=(freeCharge(a)+freeOwnerCharge(b))*a.capacity/(a.capacity+freeCapacity(b));
+  if(b.base!==undefined||b.id==='ball')contact.target=integerContactTarget(a,b);
   const delta=freeCharge(a)-contact.target;
   if(Math.abs(delta)>EPS){freeStart(delta>0?b:a,delta>0?a:b,'contact',Math.abs(delta));renderFreeBench();return;}
   contact.settled=true;
@@ -518,7 +532,7 @@ function freePointerDown(e){
  const removal=e.target.closest('[data-conductor-remove]');if(removal){e.preventDefault();removeFreeConductor(removal.dataset.conductorRemove);return true;}
  const node=e.target.closest('[data-conductor]'),clip=e.target.closest('[data-clip]');if(!node&&!clip)return false;
  e.preventDefault();const p=point(e,svgBench);
- if(clip){bench.free.groundId=null;bench.ground=false;if(bench.flight?.reason==='ground')bench.flight=null;bench.drag={type:'free-clip'};bench.cable={x:p.x,y:p.y};}
+ if(clip){bench.free.groundId=null;bench.ground=false;if(bench.flight?.reason==='ground')cancelFreeFlight();bench.drag={type:'free-clip'};bench.cable={x:p.x,y:p.y};}
  else{const c=freeConductors().find(v=>v.uid===node.dataset.conductor);if(!c)return true;bench.selected='conductor:'+c.uid;bench.drag={type:'conductor',c,dx:c.x-p.x,dy:c.y-p.y};}
  svgBench.setPointerCapture(e.pointerId);renderFreeBench();return true;
 }
@@ -561,7 +575,7 @@ function drawFreeScope(c){
   if(state.show){const slots=[{x:side*3,y:26},{x:side*3,y:54},{x:side*3,y:82}];slots.forEach((p,i)=>{const m=chargeText(leaf,p.x-7,p.y,true,{'data-conductor-ion':c.uid,'data-region':'leaf'+side,'data-charge-weight':2});m.querySelector('circle').setAttribute('r',5.5);m.querySelector('text').style.fontSize='10px';});freeRegionElectrons(leaf,6-f.leafCharges[side===-1?0:1],slots.map(p=>({x:p.x+7,y:p.y+8})),'leaf'+side,c.uid,6);}
   g.append(leaf);
  }
- g.append(el('text',{x:0,y:-129,'text-anchor':'middle','font-size':16,fill:Math.abs(f.cap)<EPS?'#355d59':f.cap>0?'#b1342d':'#176bb5','data-cap-charge':f.cap},'金屬帽：'+chargeLabel(f.cap)),el('text',{x:0,y:175,class:'benchLabel','font-size':17},'金箔驗電器 · '+chargeLabel(f.net)),el('text',{x:0,y:196,'text-anchor':'middle','font-size':15,fill:'#355d59'},f.angle>.01?'兩葉 '+chargeLabel(f.leafCharges[0])+' / '+chargeLabel(f.leafCharges[1]):'兩葉閉合'));
+ g.append(el('text',{x:0,y:-129,'text-anchor':'middle','font-size':16,fill:Math.abs(f.cap)<EPS?'#355d59':f.cap>0?'#b1342d':'#176bb5','data-cap-charge':f.cap},'金屬帽：'+(Math.abs(f.cap)<EPS?'中性':f.cap>0?'正電':'負電')),el('text',{x:0,y:175,class:'benchLabel','font-size':17},'金箔驗電器 · '+chargeLabel(f.net)),el('text',{x:0,y:196,'text-anchor':'middle','font-size':15,fill:'#355d59'},f.angle>.01?'兩葉同號張開':'兩葉閉合'));
  freeRemoveHandle(g,c,92,-55);return g;
 }
 function drawFreeSphere(c){
@@ -586,7 +600,7 @@ function renderFreeBench(){
  if(bench.free.earth)for(const c of freeConductors()){const t=freeTerminal(c);svg.append(el('circle',{cx:t.x,cy:t.y,r:13,fill:'#fff',stroke:'#368069','stroke-width':3,'data-terminal':c.uid}));}
  if(bench.free.earth){const clip=el('g',{'data-clip':true,transform:`translate(${end.x} ${end.y})`,tabindex:0,role:'button','aria-label':'拖綠夾到接點接地，拖開斷地',class:'groundClip'});clip.append(el('circle',{r:30,fill:'transparent','pointer-events':'all'}),el('circle',{r:21,fill:'#e1f2dd',stroke:'#368069','stroke-width':3}),el('path',{d:'M-9 -10L9 10M9 -10L-9 10',stroke:'#368069','stroke-width':4}));svg.append(clip);}
  for(const o of bench.objects)svg.append(drawObject(o));
- if(state.show)for(const c of freeConductors()){if(c.internal){const f=c.internal,pos=scopeInternalPosition(c),g=internalNodes.get(String(f.id))||makeInternalElectron(c);g.setAttribute('transform',`translate(${pos.x} ${pos.y})`);g.dataset.progress=String(f.progress);svg.append(g);}}
+ if(state.show)for(const c of freeConductors()){if(c.internal){const f=c.internal,pos=scopeInternalPosition(c),g=internalNodes.get(String(f.id))||makeInternalElectron(c);g.setAttribute('transform',`translate(${pos.x} ${pos.y})`);g.dataset.progress=String(f.progress);g.dataset.internalDirection=f.dir*(f.returning?-1:1)>0?'leaf-to-cap':'cap-to-leaf';svg.append(g);}}
  if(bench.flight&&state.show){const p=freeFlightPosition(performance.now()),id=String(bench.flight.id),g=externalNode?.dataset.externalFlight===id?externalNode:el('g',{id:'singleElectron','data-external-flight':id});if(!g.childNodes.length){chargeText(g,0,0,false);g.append(el('text',{x:0,y:-20,'font-size':14,fill:'#176bb5'},Number(bench.flight.amount.toFixed(4))+' 格'));}g.setAttribute('transform',`translate(${p.x} ${p.y})`);svg.append(g);}
  if(focus)svg.querySelector(`[data-conductor="${focus}"]`)?.focus({preventScroll:true});
  const selected=String(bench.selected||'');$('removeSelected').disabled=!(bench.objects.some(o=>o.uid===bench.selected)||freeConductors().some(c=>'conductor:'+c.uid===selected)||(selected==='earth'&&!!bench.free.earth));
@@ -619,6 +633,8 @@ function advanceScopeInternal(t){
  }
  return changed;
 }
+function cancelScopeInternal(c){c.internal=null;}
+
 function scopeInternalPosition(c){
  const f=c.internal;if(!f)return null;const angle=freeLeafState(c).angle*Math.PI/180,side=f.side===0?-1:1;
  const leaf={x:side*(3*Math.cos(angle)+75*Math.sin(angle)),y:20+75*Math.cos(angle)-3*Math.sin(angle)},points=[{x:0,y:-85},{x:0,y:-25},{x:0,y:20},leaf];
@@ -627,6 +643,6 @@ function scopeInternalPosition(c){
 }
 function makeInternalElectron(c){
  const f=c.internal,g=el('g',{'data-internal-electron':c.uid,'data-internal-flight':f.id,'data-internal-direction':f.dir>0?'leaf-to-cap':'cap-to-leaf','data-side':f.side,'pointer-events':'none'});
- g.append(el('circle',{r:10,fill:'#146cbd',stroke:'#fff','stroke-width':2}),el('text',{x:0,y:1,'text-anchor':'middle','dominant-baseline':'central','font-size':17,fill:'#fff'},'−'),el('text',{x:14,y:-12,'font-size':12,fill:'#14538b'},Number(f.amount.toFixed(3))+' 格'));return g;
+ g.append(el('circle',{r:10,fill:'#146cbd',stroke:'#fff','stroke-width':2}),el('text',{x:0,y:1,'text-anchor':'middle','dominant-baseline':'central','font-size':17,fill:'#fff'},'−'),el('text',{x:14,y:-12,'font-size':12,fill:'#14538b'},'電子'));return g;
 }
-Object.assign(window.directBench,{scopeInternalGoal,scopeInternalPosition});
+Object.assign(window.directBench,{scopeInternalGoal,scopeInternalPosition,freeGroundTarget,integerContactTarget});

@@ -1,4 +1,4 @@
-# 電荷實驗室 v7.2
+# 電荷實驗室 v7.3
 
 國中靜電與庫倫定律教具：https://hikaruhen.github.io/staticElectricity/
 
@@ -9,3 +9,5 @@
 庫倫距離吸附，按畫布右上計算才顯示答案，參數/基準改變後隱藏。模式切換不自動全螢幕或轉向。
 
 分布、角度、時間、相對有效容量與材料序列均有明示教學假設；不等同完整實物電場/電容求解。來源及細節在教具「原理」。參照[OpenStax 玻璃與絲絹](https://openstax.org/books/physics/pages/18-1-electrical-charges-conservation-of-charge-and-transfer-of-charge)、[驗電器原理](https://openstax.org/books/college-physics-2e/pages/18-2-conductors-and-insulators)、[Colorado感應順序](https://physicslabs.colorado.edu/demos/electricity-and-magnetism/electrostatics/induced-charge/induced-charge-on-electroscope/)。程式與圖像原創；互動參考[PhET](https://phet.colorado.edu/zh_TW/simulations/balloons-and-static-electricity)。課程參考《05-115國中自然3上備課ch4-理化》。
+
+自由操作採整數淨電荷格、外部逐1格轉移並記在途帳；不同容量接觸採守恆的最近整數配置。帽/葉只示電性與張合，不顯局部小數。內部電子與葉角仍連續回應，詳見原理。
