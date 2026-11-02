@@ -67,8 +67,8 @@ function updatePointerRange(e){
  const vertical=document.body.dataset.layout==='rotated-landscape';
  const length=vertical?r.height:r.width,position=vertical?e.clientY-r.top:e.clientX-r.left;
  const inset=Math.min(8,length/4),ratio=clamp((position-inset)/(length-2*inset),0,1);
- const min=Number(input.min||0),max=Number(input.max||100),step=Number(input.step)||1;
- input.value=String(clamp(min+Math.round((max-min)*ratio/step)*step,min,max));
+ const min=Number(input.min||0),max=Number(input.max||100),step=input.step==='any'?0:Number(input.step)||1;
+ input.value=String(clamp(min+(step?Math.round((max-min)*ratio/step)*step:(max-min)*ratio),min,max));
  input.dispatchEvent(new Event('input',{bubbles:true}));
 }
 document.addEventListener('pointerdown',e=>{

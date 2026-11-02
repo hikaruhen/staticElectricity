@@ -80,3 +80,5 @@ body.appShell:not([data-layout=rotated-landscape]){position:fixed;inset:auto;lef
 #ratioRead{white-space:pre-line;line-height:1.7;font-size:15px}
 
 #ratioRead .ratioLine{display:block}#ratioRead .forceRatio{color:#b1342d;font-weight:700}
+
+#forceRead[data-revealed=false]{font-size:18px}#calculateForce{min-height:38px}
