@@ -78,3 +78,5 @@ body.appShell:not([data-layout=rotated-landscape]){position:fixed;inset:auto;lef
 .appShell #staticControls .readouts>div{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:7px;align-items:center}.appShell #staticControls .staticDelete{min-height:36px;padding:6px 8px;font-size:12px}.staticDelete:disabled{opacity:.45;cursor:default}.staticRemove{cursor:pointer}.staticRemove:focus-visible{outline:3px solid #cf8a43}
 
 #ratioRead{white-space:pre-line;line-height:1.7;font-size:15px}
+
+#ratioRead .ratioLine{display:block}#ratioRead .forceRatio{color:#b1342d;font-weight:700}
