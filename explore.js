@@ -4,11 +4,11 @@ const lab={baseline:{r:2,q1:2,q2:-2}};
 const baseSwitch=switchMode,baseReset=reset,baseCoulomb=renderCoulomb;
 switchMode=function(mode){
  baseSwitch(mode);
- const extra=['materials','induction','quiz'].includes(mode);
+ const extra=['induction','quiz'].includes(mode);
  for(const name of ['static','coulomb']){$(name+'Scene').hidden=mode!==name;$(name+'Controls').hidden=mode!==name;}
  $('exploreScene').hidden=!extra;$('exploreControls').hidden=!extra;
- $('charges').parentElement.hidden=mode==='coulomb';$('calculateForce').hidden=mode!=='coulomb';$('resetBench').hidden=!['materials','induction'].includes(mode);
- for(const name of ['static','materials','induction','coulomb','quiz']){const tab=$(name+'Tab');tab.classList.toggle('active',mode===name);tab.setAttribute('aria-selected',mode===name);}
+ $('charges').parentElement.hidden=mode==='coulomb';$('calculateForce').hidden=mode!=='coulomb';$('resetBench').hidden=!['induction'].includes(mode);
+ for(const name of ['static','induction','coulomb','quiz']){const tab=$(name+'Tab');tab.classList.toggle('active',mode===name);tab.setAttribute('aria-selected',mode===name);}
 };
 reset=function(){baseReset();if(state.mode==='coulomb'){lab.baseline={r:2,q1:2,q2:-2};renderCoulomb();}};
 renderCoulomb=function(){
@@ -34,7 +34,7 @@ renderCoulomb=function(){
  g.append(el('text',{id:'canvasRelation',x:mobile?225:450,y:475,'text-anchor':'middle','font-size':mobile?26:32,'font-weight':700,fill:state.q1*state.q2===0?'#65796f':'#b1342d'},reveal?relation:''));
  $('coulombSvg').append(g);
 };
-for(const [i,name] of ['static','materials','induction','coulomb','quiz'].entries()){const tab=$(name+'Tab');tab.firstChild.textContent='0'+(i+1)+' ';document.querySelector('nav').append(tab);tab.onclick=()=>switchMode(name);}
+for(const [i,name] of ['static','induction','coulomb','quiz'].entries()){const tab=$(name+'Tab');tab.firstChild.textContent='0'+(i+1)+' ';document.querySelector('nav').append(tab);tab.onclick=()=>switchMode(name);}
 $('setBaseline').onclick=()=>{state.forceAnswerKey=null;lab.baseline={r:state.r,q1:state.q1,q2:state.q2};renderCoulomb();};
 $('reset').onclick=()=>reset();
 $('arrow').setAttribute('markerUnits','userSpaceOnUse');$('arrow').setAttribute('markerWidth',10);$('arrow').setAttribute('markerHeight',10);

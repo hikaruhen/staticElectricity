@@ -3,10 +3,12 @@
 const matter=[
  {id:'fur',name:'毛皮',kind:'fur',color:'#bd9164',rank:0},
  {id:'glass',name:'玻璃',kind:'rod',color:'#b7e2eb',rank:1},
+ {id:'silk',name:'絲絹',kind:'silk',color:'#d9b9d7',rank:1.5},
  {id:'plastic',name:'塑膠',kind:'rod',color:'#91bead',rank:2}
 ];
 const ballKind={id:'ball',name:'帶電球',kind:'ball',color:'#dee7e7',rank:null};
-const kind=id=>id==='ball'?ballKind:matter.find(m=>m.id===id);
+const componentKinds=[{id:'electroscope',name:'金箔驗電器',kind:'scope-icon'},{id:'metal-sphere',name:'絕緣金屬球',kind:'sphere-icon'},{id:'earth',name:'大地／接地線',kind:'earth-icon'}];
+const kind=id=>id==='ball'?ballKind:matter.find(m=>m.id===id)||componentKinds.find(m=>m.id===id);
 const EPS=1e-7,benchModes=['materials','induction','quiz'];
 const bench={objects:[],electrons:12,earth:0,ground:false,cable:{x:0,y:0},drag:null,flight:null,next:1,travel:0,contact:null,removedCharge:0,importedCharge:0,message:'',width:900,selected:null,events:[],quiz:null};
 const ionSlots=Array.from({length:12},(_,i)=>({x:(i%4-1.5)*39,y:(Math.floor(i/4)-1)*38}));
@@ -15,7 +17,7 @@ const previousMode=switchMode,previousReset=reset;
 function benchSize(){bench.width=900;return bench.width;}
 function scaleBench(){return bench.width<600?.7:1;}
 function sphere(){return {x:bench.width*.69,y:245,r:bench.width<600?83:110};}
-function earthPoint(){return {x:bench.width-48,y:440};}
+function earthPoint(){return state.mode==='induction'&&bench.free?.earth?bench.free.earth:{x:bench.width-48,y:440};}
 function terminal(){const s=sphere();return {x:s.x+s.r*.68,y:s.y+s.r*.68};}
 function halfSize(o){return (o.id==='ball'?65:100)*scaleBench();}
 function objectCharge(o){return 12-o.e;}
@@ -53,6 +55,7 @@ function record(type,data={}){
  if(type==='remove'&&data.uid===q.source)failQuiz('指定帶電球被刪除了，不能用替換物品完成任務。請重新挑戰。');
 }
 function addObject(id,x,y,charge=0){
+ if(state.mode==='induction'&&componentKinds.some(m=>m.id===id))return addFreeComponent(id,x,y);
  if(!kind(id))return null;
  const o={uid:bench.next++,id,x:clamp(x,75,bench.width-75),y:clamp(y,105,390),e:12-charge};
  bench.objects.push(o);bench.selected=o.uid;bench.importedCharge+=charge;
@@ -98,7 +101,7 @@ function buildBenchControls(){
   const retry=html('button',{id:'retryQuiz'},'重新挑戰本題');retry.onclick=()=>reset();
   c.append(html('ol',{id:'quizSteps',class:'quizSteps'}),check,html('p',{id:'quizFeedback',role:'status',class:'quizFeedback'}),retry);
  }else{
-  const tray=html('div',{id:'materialTray',class:'materialTray','aria-label':'材料架：毛皮、玻璃、塑膠'});
+  const tray=html('div',{id:'materialTray',class:'materialTray','aria-label':'材料架：毛皮、玻璃、絲絹、塑膠'});
   for(const m of matter)tray.append(makeTile(m));
   c.append(tray);
   if(state.mode==='induction'){
@@ -108,8 +111,10 @@ function buildBenchControls(){
    const output=html('output',{id:'ballChargeRead',for:'ballCharge'},chargeLabel(ballSetting));range.oninput=()=>{ballSetting=+range.value;output.textContent=chargeLabel(ballSetting);};
    const tile=makeTile(ballKind);tile.id='chargedBallTile';tile.dataset.source='ball';
    source.append(label,output,range,tile,html('p',{class:'note'},'先設定正／負電量，再把球拖進桌面。此設定只作用於下一顆球；不會改變桌上物品。'));
-   const addScope=html('button',{id:'addElectroscope',class:'primary'},'加入金箔驗電器');addScope.onclick=()=>addFreeElectroscope();
-   c.append(source,addScope,html('p',{class:'note'},'目標球與驗電器可拖動、刪除。接地夾拖到任一綠色接點；拖開即斷地。驗電器只有金屬帽接觸會傳電，玻璃外殼與絕緣塞不導電。'));
+   const components=html('div',{id:'freeComponentTray',class:'materialTray','aria-label':'拖入導體與大地'});
+   for(const m of componentKinds){const tile=makeTile(m);tile.dataset.component=m.id;tile.id={electroscope:'electroscopeTile','metal-sphere':'metalSphereTile',earth:'earthTile'}[m.id];components.append(tile);}
+   c.append(html('p',{class:'miniLabel'},'元件：拖入白框'),components,source,html('p',{class:'note'},'空桌開始，自行拖入材料、導體與大地。玻璃與乾燥絲絹摩擦：玻璃正、絲絹負；序列受配方與濕度影響。大地／接地線共用一組，拖入後綠夾可接任一導體。'));
+
   }
   c.append(html('p',{class:'note'},state.mode==='materials'?'三種材質各自拖入，接觸後來回摩擦。塑膠在此假設為乾燥聚乙烯表面；摩擦序列只作教學示意。':'自行摩擦材質，或拖入外部已帶電的導電球。靠近、接觸目標球；拖動綠夾接地或斷地。＋背景固定，只有 − 轉移。'));
  }
@@ -118,7 +123,7 @@ function buildBenchControls(){
 }
 function makeTile(m){
  const tile=html('div',{class:'materialTile',tabindex:0,role:'button','aria-label':`拖入${m.name}；Enter 放到桌面`});
- if(m.id!=='ball')tile.dataset.material=m.id;
+ if(m.id!=='ball'&&!componentKinds.some(c=>c.id===m.id))tile.dataset.material=m.id;
  const icon=el('svg',{viewBox:'-110 -85 220 180','aria-hidden':true});drawShape(icon,m);tile.append(icon,document.createTextNode(m.name));
  tile.addEventListener('pointerdown',e=>startTray(e,m.id));
  tile.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();addObject(m.id,bench.width<600?80:170,145+bench.objects.length%2*180,m.id==='ball'?ballSetting:0);}});
@@ -126,6 +131,10 @@ function makeTile(m){
 }
 function drawShape(g,m){
  const common={stroke:'#54706c','stroke-width':2};
+ if(m.kind==='scope-icon'){g.append(el('rect',{x:-65,y:-35,width:130,height:115,rx:13,fill:'#eff7f7',stroke:'#719596','stroke-width':4}),el('path',{d:'M0 -60V12M0 12L-28 65M0 12L28 65',stroke:'#bd8e20','stroke-width':7,fill:'none'}),el('ellipse',{cx:0,cy:-65,rx:23,ry:13,fill:'#bacfcd',stroke:'#638783','stroke-width':3}));return;}
+ if(m.kind==='sphere-icon'){g.append(el('rect',{x:-12,y:25,width:24,height:65,fill:'#bac8bf'}),el('circle',{cy:-15,r:54,fill:'#dae7e5',stroke:'#638783','stroke-width':4}));return;}
+ if(m.kind==='earth-icon'){g.append(el('path',{d:'M-75 -40Q-20 -70 0 -20V28m-38 0h76m-62 16h48m-36 16h24',fill:'none',stroke:'#368069','stroke-width':7}),el('circle',{cx:-75,cy:-40,r:18,fill:'#e1f2dd',stroke:'#368069','stroke-width':4}));return;}
+ if(m.kind==='silk'){g.append(el('path',{d:'M-98 -55Q-50 -76 0 -55T98 -55L90 58Q45 78 0 58T-98 58Z',fill:m.color,...common}));for(let j=0;j<5;j++)g.append(el('path',{d:`M${-74+j*36} -53Q${-94+j*36} 0 ${-74+j*36} 58`,stroke:'#b58bb4','stroke-width':2,fill:'none'}));return;}
  if(m.kind==='ball'){
   g.append(el('circle',{r:65,fill:m.color,...common}),el('path',{d:'M-37 -22Q-23 -48 0 -42',fill:'none',stroke:'#fff','stroke-width':9,'stroke-linecap':'round'}));return;
  }
@@ -218,7 +227,19 @@ function finishTransfer(){
  change(f.from,-f.amount);change(f.to,f.amount);bench.flight=null;
  record('transfer',{reason:f.reason,amount:f.amount,from:f.from==='sphere'||f.from==='earth'?f.from:f.from.uid,to:f.to==='sphere'||f.to==='earth'?f.to:f.to.uid});
 }
-function touchingMaterials(a,b){return Math.abs(a.x-b.x)<185*scaleBench()&&Math.abs(a.y-b.y)<125*scaleBench();}
+const materialGeometryCache=new Map();
+function materialGeometry(id){
+ if(materialGeometryCache.has(id))return materialGeometryCache.get(id);
+ let svg=document.getElementById('materialGeometrySvg');if(!svg){svg=el('svg',{id:'materialGeometrySvg',width:1,height:1,'aria-hidden':'true',style:'position:fixed;left:-10000px;top:-10000px;opacity:0;pointer-events:none;overflow:visible'});document.body.append(svg);}
+ const g=el('g');drawShape(g,kind(id));svg.append(g);const shape=g.firstElementChild,length=shape.getTotalLength(),points=[];
+ for(let d=0;d<length;d+=2){const p=shape.getPointAtLength(d);points.push({x:p.x,y:p.y});}
+ const geometry={shape,points};materialGeometryCache.set(id,geometry);return geometry;
+}
+function touchingMaterials(a,b){
+ if(Math.abs(a.x-b.x)>220*scaleBench()||Math.abs(a.y-b.y)>180*scaleBench())return false;
+ const ga=materialGeometry(a.id),gb=materialGeometry(b.id),dx=(a.x-b.x)/scaleBench(),dy=(a.y-b.y)/scaleBench();
+ return ga.points.some(p=>gb.shape.isPointInFill(new DOMPoint(p.x+dx,p.y+dy)))||gb.points.some(p=>ga.shape.isPointInFill(new DOMPoint(p.x-dx,p.y-dy)));
+}
 function friction(o,dist){
  bench.travel+=dist;if(bench.travel<55||bench.flight||o.id==='ball')return;
  for(const b of bench.objects){
@@ -256,6 +277,7 @@ function moveObject(o,x,y){
  if(o.uid===bench.quiz?.source)record('source-move');if(state.mode==='induction'&&bench.flight&&!freeFlightValid(bench.flight))bench.flight=null;renderBench();
 }
 function removeObject(uid){
+ if(state.mode==='induction'&&uid==='earth'){removeFreeEarth();return;}
  if(state.mode==='induction'&&String(uid).startsWith('conductor:')){removeFreeConductor(String(uid).slice(10));return;}
  const o=bench.objects.find(o=>o.uid===uid);if(!o)return;
  if(bench.flight&&(bench.flight.from===o||bench.flight.to===o))bench.flight=null;
@@ -293,6 +315,7 @@ svgBench.addEventListener('pointerdown',e=>{
 });
 svgBench.addEventListener('pointermove',e=>{
  if(!bench.drag)return;const p=point(e,svgBench),d=bench.drag;
+ if(state.mode==='induction'&&d.type==='free-earth'){const old={...bench.free.earth};bench.free.earth.x=clamp(p.x+d.dx,55,850);bench.free.earth.y=clamp(p.y+d.dy,110,440);if(!freeGroundOwner()){bench.cable.x+=bench.free.earth.x-old.x;bench.cable.y+=bench.free.earth.y-old.y;}renderFreeBench();return;}
  if(state.mode==='induction'&&d.type==='free-clip'){bench.cable={x:clamp(p.x,25,875),y:clamp(p.y,70,475)};renderFreeBench();return;}
  if(state.mode==='induction'&&d.type==='conductor'){moveFreeConductor(d.c,p.x+d.dx,p.y+d.dy);return;}
  if(d.type==='clip'){bench.cable={x:clamp(p.x,25,bench.width-25),y:clamp(p.y,85,475)};renderBench();}else moveObject(d.o,p.x+d.dx,p.y+d.dy);
@@ -368,7 +391,7 @@ requestAnimationFrame(benchTick);
 // Free bench conductors: separate net charge, polarization, and contact capacitance.
 // Quiz keeps its original fixed target and original solver above.
 function initFreeBench(){
- bench.free={conductors:[{uid:'target',type:'sphere',x:621,y:245,e:12,base:12,capacity:1,r:110}],groundId:null,contacts:new Map(),internalNext:1,externalNext:1};
+ bench.free={conductors:[],earth:null,groundId:null,contacts:new Map(),internalNext:1,externalNext:1};
 }
 function freeConductors(){return bench.free?.conductors||[];}
 function freeCharge(c){return c.base-c.e;}
@@ -378,7 +401,7 @@ function freeCenter(c){return{x:c.x,y:c.type==='scope'?c.y-85:c.y};}
 function freeRadius(o){return o.base===undefined?halfSize(o):o.r;}
 function freeEndpoint(o){if(o==='earth')return earthPoint();return o.base===undefined?{x:o.x,y:o.y}:freeCenter(o);}
 function freeTerminal(c){const p=freeCenter(c);return c.type==='scope'?{x:p.x+36,y:p.y+8}:{x:c.x+c.r*.68,y:c.y+c.r*.68};}
-function freeGroundOwner(){return freeConductors().find(c=>c.uid===bench.free.groundId);}
+function freeGroundOwner(){if(!bench.free?.earth)return null;return freeConductors().find(c=>c.uid===bench.free.groundId);}
 function freeGap(a,b){
  const material=[a,b].find(o=>o.base===undefined&&o.id!=='ball');
  if(material){const c=material===a?b:a,p=freeEndpoint(c),dx=Math.abs(p.x-material.x)-76,dy=Math.abs(p.y-material.y)-36;return Math.hypot(Math.max(dx,0),Math.max(dy,0))+Math.min(Math.max(dx,dy),0)-24-freeRadius(c);}
@@ -394,12 +417,21 @@ function freeLeafState(c){
  return{net:q,field,leaf,leafCharges:[...leafCharges],cap,targetLeaf:clamp(.45*(q+field),-10,10),angle:Math.min(52,20*Math.sqrt(Math.max(0,leafCharges[0]*leafCharges[1])))};
 }
 function freeSystemCharge(){return bench.objects.reduce((n,o)=>n+objectCharge(o),0)+freeConductors().reduce((n,c)=>n+freeCharge(c),0)+bench.earth+bench.removedCharge;}
-function syncFreeBench(){const target=freeConductors().find(c=>c.uid==='target');bench.electrons=target?target.e:12;bench.ground=!!freeGroundOwner();}
-function addFreeElectroscope(){
- if(state.mode!=='induction')return;
- const count=freeConductors().filter(c=>c.type==='scope').length,c={uid:'scope'+bench.next++,type:'scope',x:360+(count%2)*180,y:240,e:24,base:24,capacity:.6,r:30,leafCharges:[0,0],internal:null};
- freeConductors().push(c);bench.selected='conductor:'+c.uid;bench.message='已加入中性金箔驗電器：帶電物靠近金屬帽，觀察兩葉；接觸帽或拖接地夾到綠接點可交換電子。';renderFreeBench();
+function syncFreeBench(){const target=freeConductors().find(c=>c.type==='sphere');bench.electrons=target?target.e:12;bench.ground=!!freeGroundOwner();}
+function addFreeComponent(id,x,y){
+ if(state.mode!=='induction')return null;
+ if(id==='earth'){
+  if(bench.free.earth){bench.message='桌上已有共用大地，請移動現有元件。';renderFreeBench();return bench.free.earth;}
+  bench.free.earth={uid:'earth',x:clamp(x,55,850),y:clamp(y,110,440)};bench.cable={x:clamp(x-60,25,875),y:clamp(y-45,70,475)};bench.selected='earth';renderFreeBench();return bench.free.earth;
+ }
+ const scope=id==='electroscope',c=scope?{uid:'scope'+bench.next++,type:'scope',x:clamp(x,90,810),y:clamp(y,180,300),e:24,base:24,capacity:.6,r:30,leafCharges:[0,0],internal:null}:{uid:'sphere'+bench.next++,type:'sphere',x:clamp(x,120,780),y:clamp(y,155,315),e:12,base:12,capacity:1,r:110};
+ freeConductors().push(c);bench.selected='conductor:'+c.uid;moveFreeConductor(c,c.x,c.y);bench.message='已拖入中性'+(scope?'金箔驗電器':'絕緣支架金屬球')+'，可靠近、接觸或接地。';renderFreeBench();return c;
 }
+function removeFreeEarth(){
+ if(!bench.free.earth)return;if(bench.flight?.reason==='ground')bench.flight=null;
+ bench.removedCharge+=bench.earth;bench.earth=0;bench.free.earth=null;bench.free.groundId=null;bench.ground=false;if(bench.drag?.type==='free-earth'||bench.drag?.type==='free-clip')bench.drag=null;bench.selected=null;bench.message='大地／接地線已移出，已斷地；移出電荷仍計入守恆帳。';renderFreeBench();
+}
+
 function removeFreeConductor(uid){
  const c=freeConductors().find(v=>v.uid===uid);if(!c)return;c.internal=null;
  if(bench.flight&&(bench.flight.from===c||bench.flight.to===c||bench.flight.via===c))bench.flight=null;
@@ -481,6 +513,8 @@ function freeTick(t){
  }
 }
 function freePointerDown(e){
+ if(e.target.closest('[data-earth-remove]')){e.preventDefault();removeFreeEarth();return true;}
+ if(e.target.closest('[data-free-earth]')){e.preventDefault();const p=point(e,svgBench),earth=bench.free.earth;bench.selected='earth';bench.drag={type:'free-earth',dx:earth.x-p.x,dy:earth.y-p.y};svgBench.setPointerCapture(e.pointerId);renderFreeBench();return true;}
  const removal=e.target.closest('[data-conductor-remove]');if(removal){e.preventDefault();removeFreeConductor(removal.dataset.conductorRemove);return true;}
  const node=e.target.closest('[data-conductor]'),clip=e.target.closest('[data-clip]');if(!node&&!clip)return false;
  e.preventDefault();const p=point(e,svgBench);
@@ -496,6 +530,8 @@ function endFreeDrag(){
  bench.drag=null;syncFreeBench();renderFreeBench();
 }
 function freeKeyDown(e){
+ if(e.target.closest('[data-earth-remove]')&&['Enter',' '].includes(e.key)){e.preventDefault();removeFreeEarth();return true;}
+ const earthNode=e.target.closest('[data-free-earth]');if(earthNode&&['ArrowLeft','ArrowRight','ArrowUp','ArrowDown'].includes(e.key)){e.preventDefault();const earth=bench.free.earth,dx=e.key==='ArrowLeft'?-20:e.key==='ArrowRight'?20:0,dy=e.key==='ArrowUp'?-20:e.key==='ArrowDown'?20:0;earth.x=clamp(earth.x+dx,55,850);earth.y=clamp(earth.y+dy,110,440);if(!freeGroundOwner()){bench.cable.x+=dx;bench.cable.y+=dy;}renderFreeBench();return true;}
  const remove=e.target.closest('[data-conductor-remove]');if(remove&&['Enter',' '].includes(e.key)){e.preventDefault();removeFreeConductor(remove.dataset.conductorRemove);return true;}
  const g=e.target.closest('[data-conductor]');if(!g||!['ArrowLeft','ArrowRight','ArrowUp','ArrowDown'].includes(e.key))return false;
  e.preventDefault();const c=freeConductors().find(c=>c.uid===g.dataset.conductor);if(!c)return true;bench.selected='conductor:'+c.uid;
@@ -540,19 +576,22 @@ function drawFreeSphere(c){
 function renderFreeBench(){
  if(state.mode!=='induction'||!bench.free)return;syncFreeBench();const svg=$('exploreSvg'),focus=document.activeElement?.dataset.conductor,internalNodes=new Map([...svg.querySelectorAll('[data-internal-electron]')].map(e=>[e.dataset.internalFlight,e])),externalNode=svg.querySelector('#singleElectron');svg.setAttribute('viewBox','0 0 900 540');svg.replaceChildren();
  svg.append(el('rect',{x:8,y:45,width:884,height:475,rx:22,fill:'#f0f4ea',stroke:'#cbd9ca','stroke-dasharray':'7 7'}));
- $('sceneTitle').textContent='自由操作起電';$('exploreHint').textContent='拖動金屬球／驗電器；帶電物接觸金屬帽才會交換電子，綠夾可接任一接點';
+ $('sceneTitle').textContent='自由操作起電';$('exploreHint').textContent='從材料架拖入物品，接觸並來回摩擦；先拖入大地／接地線，才可用綠夾接地';
  for(const c of freeConductors())svg.append(c.type==='scope'?drawFreeScope(c):drawFreeSphere(c));
  const earth=earthPoint(),owner=freeGroundOwner(),end=owner?freeTerminal(owner):bench.cable;
- svg.append(el('path',{d:`M${earth.x} ${earth.y}Q${earth.x-90} ${earth.y-15} ${end.x} ${end.y}`,stroke:'#368069','stroke-width':6,fill:'none','data-earth-cable':true}),el('path',{d:`M${earth.x} ${earth.y}v17m-22 0h44m-16 9h24m-18 9h12`,stroke:'#368069','stroke-width':4,fill:'none'}),el('text',{x:earth.x-15,y:505,class:'benchLabel'},'大地'));
- for(const c of freeConductors()){const t=freeTerminal(c);svg.append(el('circle',{cx:t.x,cy:t.y,r:13,fill:'#fff',stroke:'#368069','stroke-width':3,'data-terminal':c.uid}));}
- const clip=el('g',{'data-clip':true,transform:`translate(${end.x} ${end.y})`,tabindex:0,role:'button','aria-label':'拖綠夾到接點接地，拖開斷地',class:'groundClip'});clip.append(el('circle',{r:30,fill:'transparent','pointer-events':'all'}),el('circle',{r:21,fill:'#e1f2dd',stroke:'#368069','stroke-width':3}),el('path',{d:'M-9 -10L9 10M9 -10L-9 10',stroke:'#368069','stroke-width':4}));svg.append(clip);
+ if(bench.free.earth){svg.append(el('path',{d:`M${earth.x} ${earth.y}Q${earth.x-90} ${earth.y-15} ${end.x} ${end.y}`,stroke:'#368069','stroke-width':6,fill:'none','data-earth-cable':true}));
+ const eg=el('g',{'data-free-earth':true,transform:`translate(${earth.x} ${earth.y})`,tabindex:0,role:'button','aria-label':'大地與接地線，可拖動或刪除',class:'benchObject'});eg.append(el('rect',{x:-40,y:-15,width:80,height:77,rx:12,fill:'#e3eee1',stroke:'#73a08b','stroke-width':2}),el('path',{d:'M0 0v17m-22 0h44m-16 9h24m-18 9h12',stroke:'#368069','stroke-width':4,fill:'none'}),el('text',{x:0,y:58,'text-anchor':'middle','font-size':16,fill:'#355d59'},'大地'));
+ const del=el('g',{'data-earth-remove':true,transform:'translate(43 -18)',tabindex:0,role:'button','aria-label':'刪除大地／接地線'});del.append(el('circle',{r:25,fill:'transparent','pointer-events':'all'}),el('circle',{r:13,fill:'#fffdf6',stroke:'#966c5a'}),el('text',{x:0,y:1,'text-anchor':'middle','dominant-baseline':'central','font-size':22,fill:'#8e4537'},'×'));eg.append(del);svg.append(eg);}
+
+ if(bench.free.earth)for(const c of freeConductors()){const t=freeTerminal(c);svg.append(el('circle',{cx:t.x,cy:t.y,r:13,fill:'#fff',stroke:'#368069','stroke-width':3,'data-terminal':c.uid}));}
+ if(bench.free.earth){const clip=el('g',{'data-clip':true,transform:`translate(${end.x} ${end.y})`,tabindex:0,role:'button','aria-label':'拖綠夾到接點接地，拖開斷地',class:'groundClip'});clip.append(el('circle',{r:30,fill:'transparent','pointer-events':'all'}),el('circle',{r:21,fill:'#e1f2dd',stroke:'#368069','stroke-width':3}),el('path',{d:'M-9 -10L9 10M9 -10L-9 10',stroke:'#368069','stroke-width':4}));svg.append(clip);}
  for(const o of bench.objects)svg.append(drawObject(o));
  if(state.show)for(const c of freeConductors()){if(c.internal){const f=c.internal,pos=scopeInternalPosition(c),g=internalNodes.get(String(f.id))||makeInternalElectron(c);g.setAttribute('transform',`translate(${pos.x} ${pos.y})`);g.dataset.progress=String(f.progress);svg.append(g);}}
  if(bench.flight&&state.show){const p=freeFlightPosition(performance.now()),id=String(bench.flight.id),g=externalNode?.dataset.externalFlight===id?externalNode:el('g',{id:'singleElectron','data-external-flight':id});if(!g.childNodes.length){chargeText(g,0,0,false);g.append(el('text',{x:0,y:-20,'font-size':14,fill:'#176bb5'},Number(bench.flight.amount.toFixed(4))+' 格'));}g.setAttribute('transform',`translate(${p.x} ${p.y})`);svg.append(g);}
  if(focus)svg.querySelector(`[data-conductor="${focus}"]`)?.focus({preventScroll:true});
- const selected=String(bench.selected||'');$('removeSelected').disabled=!(bench.objects.some(o=>o.uid===bench.selected)||freeConductors().some(c=>'conductor:'+c.uid===selected));
- $('benchRead').textContent=[...bench.objects.map(o=>kind(o.id).name+'：'+chargeLabel(objectCharge(o))),...freeConductors().map(c=>(c.type==='scope'?'驗電器':'目標球')+'：'+chargeLabel(freeCharge(c))+(owner===c?'（接地中）':'')),'大地：'+chargeLabel(bench.earth),'守恆核對：'+Number((freeSystemCharge()-bench.importedCharge).toFixed(6))+' 格'].join('\n');
- $('status').textContent=bench.flight?'電子沿實際接觸或接地路徑逐格轉移；分開即取消未完成轉移。':freeConductors().some(c=>c.internal)?'帽、導桿與金箔間的電子正逐格重分布；張角跟隨目前兩葉電荷。':owner?'接地中：先斷地再移開來源可留下異號電；先移開則電子回流。':bench.message||'靠近先觀察感應；接觸才轉移。金箔張開不一定代表驗電器有淨電荷。';
+ const selected=String(bench.selected||'');$('removeSelected').disabled=!(bench.objects.some(o=>o.uid===bench.selected)||freeConductors().some(c=>'conductor:'+c.uid===selected)||(selected==='earth'&&!!bench.free.earth));
+ $('benchRead').textContent=[...bench.objects.map(o=>kind(o.id).name+'：'+chargeLabel(objectCharge(o))),...freeConductors().map(c=>(c.type==='scope'?'驗電器':'目標球')+'：'+chargeLabel(freeCharge(c))+(owner===c?'（接地中）':'')),bench.free.earth?'大地：'+chargeLabel(bench.earth):'尚未加入大地','守恆核對：'+Number((freeSystemCharge()-bench.importedCharge).toFixed(6))+' 格'].join('\n');
+ $('status').textContent=!bench.objects.length&&!freeConductors().length&&!bench.free.earth?'桌面是空的，從右側拖入材料、導體或大地開始。':bench.flight?'電子沿實際接觸或接地路徑逐格轉移；分開即取消未完成轉移。':freeConductors().some(c=>c.internal)?'帽、導桿與金箔間的電子正逐格重分布；張角跟隨目前兩葉電荷。':owner?'接地中：先斷地再移開來源可留下異號電；先移開則電子回流。':bench.message||'靠近先觀察感應；接觸才轉移。金箔張開不一定代表驗電器有淨電荷。';
 }
 Object.assign(window.directBench,{freeCharge,freeField,freeLeafState,freeSystemCharge,freeCenter,freeTerminal});
 

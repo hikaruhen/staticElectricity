@@ -84,3 +84,7 @@ body.appShell:not([data-layout=rotated-landscape]){position:fixed;inset:auto;lef
 #calculateForce{min-height:38px}
 
 .appShell .sceneHeader #calculateForce,.appShell .sceneHeader #resetBench{margin-left:auto;flex:0 0 auto;width:auto;min-width:72px;min-height:34px;padding:5px 16px;font-size:14px}.sceneHeader #calculateForce[hidden],.sceneHeader #resetBench[hidden]{display:none}
+
+#freeComponentTray{grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}#freeComponentTray .materialTile{padding:5px 2px;font-size:11px}#freeComponentTray svg{height:42px}#materialTray{grid-template-columns:repeat(4,minmax(0,1fr))}#materialTray .materialTile{font-size:11px;padding:5px 2px}
+
+.appShell #exploreControls>#materialTray{grid-template-columns:repeat(4,minmax(0,1fr))}.appShell #exploreControls>#freeComponentTray{grid-template-columns:repeat(3,minmax(0,1fr))}
