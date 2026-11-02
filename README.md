@@ -1,4 +1,4 @@
-# 電荷實驗室 v7.0
+# 電荷實驗室 v7.1
 
 國中靜電與庫倫定律互動教具：https://hikaruhen.github.io/staticElectricity/
 
@@ -10,3 +10,5 @@
 物理分布、角度、運動與速度為定性教學示意；接觸相對容量設定sphere/source ball=1、electroscope=0.6，非實物量測。庫倫數值採真空點電荷模型。完整假設及來源在教具「原理」。
 
 課程參考：《05-115國中自然3上備課ch4-理化》。互動參考[PhET](https://phet.colorado.edu/zh_TW/simulations/balloons-and-static-electricity)。新程式、圖像原創。驗電器原理參照[OpenStax](https://openstax.org/books/college-physics-2e/pages/18-2-conductors-and-insulators)、[Colorado Physics](https://physicslabs.colorado.edu/demos/electricity-and-magnetism/electrostatics/induced-charge/induced-charge-on-electroscope/)。
+
+驗電器內部電子沿帽、桿、金箔可見移動；左右葉與帽的局部電荷連續更新，葉角依目前分布同步變化。來源改變依最新平衡返流，穩定後停止，無舊動畫排隊。移動標記已包含於局部帳，非額外電荷；單位與時間為示意，詳見原理。

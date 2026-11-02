@@ -69,7 +69,7 @@ function initBench(){
  }
 }
 switchMode=function(mode){
- const old=state.mode;clearTray();bench.drag=null;bench.flight=null;previousMode(mode);
+ const old=state.mode;if(old==='induction'&&old!==mode){for(const c of freeConductors())c.internal=null;document.querySelectorAll('[data-internal-electron]').forEach(e=>e.remove());}clearTray();bench.drag=null;bench.flight=null;previousMode(mode);
  if(benchModes.includes(mode)){
   if(old!==mode)initBench();
   buildBenchControls();renderBench();
@@ -368,7 +368,7 @@ requestAnimationFrame(benchTick);
 // Free bench conductors: separate net charge, polarization, and contact capacitance.
 // Quiz keeps its original fixed target and original solver above.
 function initFreeBench(){
- bench.free={conductors:[{uid:'target',type:'sphere',x:621,y:245,e:12,base:12,capacity:1,r:110}],groundId:null,contacts:new Map()};
+ bench.free={conductors:[{uid:'target',type:'sphere',x:621,y:245,e:12,base:12,capacity:1,r:110}],groundId:null,contacts:new Map(),internalNext:1,externalNext:1};
 }
 function freeConductors(){return bench.free?.conductors||[];}
 function freeCharge(c){return c.base-c.e;}
@@ -390,18 +390,18 @@ function freeField(c){
  return clamp(p,-8,8);
 }
 function freeLeafState(c){
- const q=freeCharge(c),field=freeField(c),leaf=clamp(.45*(q+field),-10,10),cap=q-leaf;
- return{net:q,field,leaf,cap,angle:Math.min(52,Math.abs(leaf)*10)};
+ const q=freeCharge(c),field=freeField(c),leafCharges=c.leafCharges||[0,0],leaf=leafCharges[0]+leafCharges[1],cap=q-leaf;
+ return{net:q,field,leaf,leafCharges:[...leafCharges],cap,targetLeaf:clamp(.45*(q+field),-10,10),angle:Math.min(52,20*Math.sqrt(Math.max(0,leafCharges[0]*leafCharges[1])))};
 }
 function freeSystemCharge(){return bench.objects.reduce((n,o)=>n+objectCharge(o),0)+freeConductors().reduce((n,c)=>n+freeCharge(c),0)+bench.earth+bench.removedCharge;}
 function syncFreeBench(){const target=freeConductors().find(c=>c.uid==='target');bench.electrons=target?target.e:12;bench.ground=!!freeGroundOwner();}
 function addFreeElectroscope(){
  if(state.mode!=='induction')return;
- const count=freeConductors().filter(c=>c.type==='scope').length,c={uid:'scope'+bench.next++,type:'scope',x:360+(count%2)*180,y:240,e:24,base:24,capacity:.6,r:30};
+ const count=freeConductors().filter(c=>c.type==='scope').length,c={uid:'scope'+bench.next++,type:'scope',x:360+(count%2)*180,y:240,e:24,base:24,capacity:.6,r:30,leafCharges:[0,0],internal:null};
  freeConductors().push(c);bench.selected='conductor:'+c.uid;bench.message='已加入中性金箔驗電器：帶電物靠近金屬帽，觀察兩葉；接觸帽或拖接地夾到綠接點可交換電子。';renderFreeBench();
 }
 function removeFreeConductor(uid){
- const c=freeConductors().find(v=>v.uid===uid);if(!c)return;
+ const c=freeConductors().find(v=>v.uid===uid);if(!c)return;c.internal=null;
  if(bench.flight&&(bench.flight.from===c||bench.flight.to===c||bench.flight.via===c))bench.flight=null;
  if(bench.drag?.c===c)bench.drag=null;
  if(bench.free.groundId===uid){bench.free.groundId=null;bench.cable=earthPoint();}
@@ -427,7 +427,7 @@ function freePairs(){
  return list;
 }
 function freeStart(from,to,reason,amount,via=null){
- if(bench.flight||amount<EPS)return;bench.flight={from,to,reason,amount:Math.min(1,amount),start:performance.now(),duration:500,free:true,via};
+ if(bench.flight||amount<EPS)return;bench.flight={from,to,reason,amount:Math.min(1,amount),start:performance.now(),duration:500,free:true,via,id:bench.free.externalNext++};
 }
 function freeFlightPosition(t){
  const f=bench.flight,p=clamp((t-f.start)/f.duration,0,1);
@@ -449,10 +449,11 @@ function freeFlightValid(f){
 }
 function freeTick(t){
  if(!bench.free)return;
+ if(advanceScopeInternal(t))renderFreeBench();
  const pairs=freePairs(),active=new Set(pairs.map(({a,b})=>a.uid+':'+b.uid));
  for(const key of bench.free.contacts.keys())if(!active.has(key))bench.free.contacts.delete(key);
  if(bench.flight&&!bench.flight.free){ // Material friction starts through the original input path.
-  bench.flight.free=true;
+  bench.flight.free=true;bench.flight.id=bench.free.externalNext++;
  }
  if(bench.flight){const f=bench.flight;
   if(!freeFlightValid(f)){bench.flight=null;renderFreeBench();}
@@ -520,11 +521,11 @@ function drawFreeScope(c){
 
  }
  for(const side of [-1,1]){
-  const leaf=el('g',{transform:`translate(0 20) rotate(${-side*f.angle})`,'data-gold-leaf':side,'data-charge':f.leaf/2});leaf.append(el('path',{d:`M${side*3} 0L${side*3} 102`,stroke:'#bd8e20','stroke-width':7,'stroke-linecap':'round'}));
-  if(state.show){const slots=[{x:side*3,y:26},{x:side*3,y:54},{x:side*3,y:82}];slots.forEach((p,i)=>{const m=chargeText(leaf,p.x-7,p.y,true,{'data-conductor-ion':c.uid,'data-region':'leaf'+side,'data-charge-weight':2});m.querySelector('circle').setAttribute('r',5.5);m.querySelector('text').style.fontSize='10px';});freeRegionElectrons(leaf,6-f.leaf/2,slots.map(p=>({x:p.x+7,y:p.y+8})),'leaf'+side,c.uid,6);}
+  const leaf=el('g',{transform:`translate(0 20) rotate(${-side*f.angle})`,'data-gold-leaf':side,'data-charge':f.leafCharges[side===-1?0:1]});leaf.append(el('path',{d:`M${side*3} 0L${side*3} 102`,stroke:'#bd8e20','stroke-width':7,'stroke-linecap':'round'}));
+  if(state.show){const slots=[{x:side*3,y:26},{x:side*3,y:54},{x:side*3,y:82}];slots.forEach((p,i)=>{const m=chargeText(leaf,p.x-7,p.y,true,{'data-conductor-ion':c.uid,'data-region':'leaf'+side,'data-charge-weight':2});m.querySelector('circle').setAttribute('r',5.5);m.querySelector('text').style.fontSize='10px';});freeRegionElectrons(leaf,6-f.leafCharges[side===-1?0:1],slots.map(p=>({x:p.x+7,y:p.y+8})),'leaf'+side,c.uid,6);}
   g.append(leaf);
  }
- g.append(el('text',{x:0,y:-129,'text-anchor':'middle','font-size':16,fill:Math.abs(f.cap)<EPS?'#355d59':f.cap>0?'#b1342d':'#176bb5','data-cap-charge':f.cap},'金屬帽：'+chargeLabel(f.cap)),el('text',{x:0,y:175,class:'benchLabel','font-size':17},'金箔驗電器 · '+chargeLabel(f.net)),el('text',{x:0,y:196,'text-anchor':'middle','font-size':15,fill:'#355d59'},Math.abs(f.leaf)>EPS?'葉各 '+chargeLabel(f.leaf/2)+(Math.abs(f.net)<EPS?' · 中性感應':''):'兩葉閉合'));
+ g.append(el('text',{x:0,y:-129,'text-anchor':'middle','font-size':16,fill:Math.abs(f.cap)<EPS?'#355d59':f.cap>0?'#b1342d':'#176bb5','data-cap-charge':f.cap},'金屬帽：'+chargeLabel(f.cap)),el('text',{x:0,y:175,class:'benchLabel','font-size':17},'金箔驗電器 · '+chargeLabel(f.net)),el('text',{x:0,y:196,'text-anchor':'middle','font-size':15,fill:'#355d59'},f.angle>.01?'兩葉 '+chargeLabel(f.leafCharges[0])+' / '+chargeLabel(f.leafCharges[1]):'兩葉閉合'));
  freeRemoveHandle(g,c,92,-55);return g;
 }
 function drawFreeSphere(c){
@@ -537,7 +538,7 @@ function drawFreeSphere(c){
  g.append(el('text',{x:0,y:-c.r-28,class:'benchLabel','data-target-charge':freeCharge(c)},'目標金屬球 · '+chargeLabel(freeCharge(c))));freeRemoveHandle(g,c,c.r+10,-c.r+10);return g;
 }
 function renderFreeBench(){
- if(state.mode!=='induction'||!bench.free)return;syncFreeBench();const svg=$('exploreSvg'),focus=document.activeElement?.dataset.conductor;svg.setAttribute('viewBox','0 0 900 540');svg.replaceChildren();
+ if(state.mode!=='induction'||!bench.free)return;syncFreeBench();const svg=$('exploreSvg'),focus=document.activeElement?.dataset.conductor,internalNodes=new Map([...svg.querySelectorAll('[data-internal-electron]')].map(e=>[e.dataset.internalFlight,e])),externalNode=svg.querySelector('#singleElectron');svg.setAttribute('viewBox','0 0 900 540');svg.replaceChildren();
  svg.append(el('rect',{x:8,y:45,width:884,height:475,rx:22,fill:'#f0f4ea',stroke:'#cbd9ca','stroke-dasharray':'7 7'}));
  $('sceneTitle').textContent='自由操作起電';$('exploreHint').textContent='拖動金屬球／驗電器；帶電物接觸金屬帽才會交換電子，綠夾可接任一接點';
  for(const c of freeConductors())svg.append(c.type==='scope'?drawFreeScope(c):drawFreeSphere(c));
@@ -546,10 +547,47 @@ function renderFreeBench(){
  for(const c of freeConductors()){const t=freeTerminal(c);svg.append(el('circle',{cx:t.x,cy:t.y,r:13,fill:'#fff',stroke:'#368069','stroke-width':3,'data-terminal':c.uid}));}
  const clip=el('g',{'data-clip':true,transform:`translate(${end.x} ${end.y})`,tabindex:0,role:'button','aria-label':'拖綠夾到接點接地，拖開斷地',class:'groundClip'});clip.append(el('circle',{r:30,fill:'transparent','pointer-events':'all'}),el('circle',{r:21,fill:'#e1f2dd',stroke:'#368069','stroke-width':3}),el('path',{d:'M-9 -10L9 10M9 -10L-9 10',stroke:'#368069','stroke-width':4}));svg.append(clip);
  for(const o of bench.objects)svg.append(drawObject(o));
- if(bench.flight&&state.show){const p=freeFlightPosition(performance.now()),g=el('g',{id:'singleElectron',transform:`translate(${p.x} ${p.y})`});chargeText(g,0,0,false);g.append(el('text',{x:0,y:-20,'font-size':14,fill:'#176bb5'},Number(bench.flight.amount.toFixed(4))+' 格'));svg.append(g);}
+ if(state.show)for(const c of freeConductors()){if(c.internal){const f=c.internal,pos=scopeInternalPosition(c),g=internalNodes.get(String(f.id))||makeInternalElectron(c);g.setAttribute('transform',`translate(${pos.x} ${pos.y})`);g.dataset.progress=String(f.progress);svg.append(g);}}
+ if(bench.flight&&state.show){const p=freeFlightPosition(performance.now()),id=String(bench.flight.id),g=externalNode?.dataset.externalFlight===id?externalNode:el('g',{id:'singleElectron','data-external-flight':id});if(!g.childNodes.length){chargeText(g,0,0,false);g.append(el('text',{x:0,y:-20,'font-size':14,fill:'#176bb5'},Number(bench.flight.amount.toFixed(4))+' 格'));}g.setAttribute('transform',`translate(${p.x} ${p.y})`);svg.append(g);}
  if(focus)svg.querySelector(`[data-conductor="${focus}"]`)?.focus({preventScroll:true});
  const selected=String(bench.selected||'');$('removeSelected').disabled=!(bench.objects.some(o=>o.uid===bench.selected)||freeConductors().some(c=>'conductor:'+c.uid===selected));
  $('benchRead').textContent=[...bench.objects.map(o=>kind(o.id).name+'：'+chargeLabel(objectCharge(o))),...freeConductors().map(c=>(c.type==='scope'?'驗電器':'目標球')+'：'+chargeLabel(freeCharge(c))+(owner===c?'（接地中）':'')),'大地：'+chargeLabel(bench.earth),'守恆核對：'+Number((freeSystemCharge()-bench.importedCharge).toFixed(6))+' 格'].join('\n');
- $('status').textContent=bench.flight?'電子沿實際接觸或接地路徑逐格轉移；分開即取消未完成轉移。':owner?'接地中：先斷地再移開來源可留下異號電；先移開則電子回流。':bench.message||'靠近先觀察感應；接觸才轉移。金箔張開不一定代表驗電器有淨電荷。';
+ $('status').textContent=bench.flight?'電子沿實際接觸或接地路徑逐格轉移；分開即取消未完成轉移。':freeConductors().some(c=>c.internal)?'帽、導桿與金箔間的電子正逐格重分布；張角跟隨目前兩葉電荷。':owner?'接地中：先斷地再移開來源可留下異號電；先移開則電子回流。':bench.message||'靠近先觀察感應；接觸才轉移。金箔張開不一定代表驗電器有淨電荷。';
 }
 Object.assign(window.directBench,{freeCharge,freeField,freeLeafState,freeSystemCharge,freeCenter,freeTerminal});
+
+
+// Each scope has two independent leaf charges. Net charge changes only via external
+// contact/ground; internal motion redistributes cap <-> one leaf without changing net.
+function scopeInternalGoal(c){return freeLeafState(c).targetLeaf/2;}
+function advanceScopeInternal(t){
+ let changed=false;
+ for(const c of freeConductors()){
+  if(c.type!=='scope')continue;c.leafCharges??=[0,0];
+  const goal=scopeInternalGoal(c);let f=c.internal;
+  if(f){const delta=goal-c.leafCharges[f.side];
+   if(Math.abs(delta)<EPS||Math.sign(delta)!==f.dir){c.internal=null;f=null;changed=true;}
+   else{
+    const progress=clamp((t-f.start)/420,0,1),increment=Math.min(f.amount*(progress-f.progress),Math.abs(delta));
+    c.leafCharges[f.side]+=f.dir*Math.max(0,increment);f.progress=progress;changed=true;
+    if(progress>=1||Math.abs(goal-c.leafCharges[f.side])<EPS){if(Math.abs(goal-c.leafCharges[f.side])<EPS)c.leafCharges[f.side]=goal;c.internal=null;f=null;}
+   }
+  }
+  if(!f){
+   const deltas=c.leafCharges.map(q=>goal-q),side=Math.abs(deltas[0])>=Math.abs(deltas[1])?0:1,delta=deltas[side];
+   if(Math.abs(delta)>EPS){c.internal={id:bench.free.internalNext++,side,dir:Math.sign(delta),amount:Math.min(.5,Math.abs(delta)),start:t,progress:0};changed=true;}
+  }
+ }
+ return changed;
+}
+function scopeInternalPosition(c){
+ const f=c.internal;if(!f)return null;const angle=freeLeafState(c).angle*Math.PI/180,side=f.side===0?-1:1;
+ const leaf={x:side*(3*Math.cos(angle)+75*Math.sin(angle)),y:20+75*Math.cos(angle)-3*Math.sin(angle)},points=[{x:0,y:-85},{x:0,y:-25},{x:0,y:20},leaf];
+ const lengths=points.slice(1).map((p,i)=>Math.hypot(p.x-points[i].x,p.y-points[i].y)),total=lengths.reduce((a,b)=>a+b,0);let distance=(f.dir>0?1-f.progress:f.progress)*total;
+ for(let i=0;i<lengths.length;i++){if(distance<=lengths[i]||i===lengths.length-1){const u=clamp(distance/lengths[i],0,1);return{x:c.x+points[i].x+(points[i+1].x-points[i].x)*u,y:c.y+points[i].y+(points[i+1].y-points[i].y)*u};}distance-=lengths[i];}
+}
+function makeInternalElectron(c){
+ const f=c.internal,g=el('g',{'data-internal-electron':c.uid,'data-internal-flight':f.id,'data-internal-direction':f.dir>0?'leaf-to-cap':'cap-to-leaf','data-side':f.side,'pointer-events':'none'});
+ g.append(el('circle',{r:10,fill:'#146cbd',stroke:'#fff','stroke-width':2}),el('text',{x:0,y:1,'text-anchor':'middle','dominant-baseline':'central','font-size':17,fill:'#fff'},'−'),el('text',{x:14,y:-12,'font-size':12,fill:'#14538b'},Number(f.amount.toFixed(3))+' 格'));return g;
+}
+Object.assign(window.directBench,{scopeInternalGoal,scopeInternalPosition});

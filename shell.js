@@ -90,9 +90,10 @@ for(const type of ['pointerup','pointercancel'])document.addEventListener(type,e
 /* Rotated overflow panes can deliver touch pointerup without a compatibility click.
    Activate a stationary touch release once, and suppress a later duplicate click. */
 let touchButtonPress=null,lastTouchButton=null;
+function touchActivationTarget(target){const control=target.closest('button,summary,input[type=checkbox],label');return control?.tagName==='LABEL'?control.querySelector('input[type=checkbox]'):control;}
 document.addEventListener('pointerdown',e=>{
  if(document.body.dataset.layout!=='rotated-landscape'||e.pointerType!=='touch')return;
- const button=e.target.closest('button,summary');if(!button||button.disabled)return;
+ const button=touchActivationTarget(e.target);if(!button||button.disabled)return;
  touchButtonPress={button,pointer:e.pointerId,x:e.clientX,y:e.clientY,moved:false};
 },true);
 document.addEventListener('pointermove',e=>{
@@ -100,14 +101,14 @@ document.addEventListener('pointermove',e=>{
 },true);
 document.addEventListener('pointerup',e=>{
  const press=touchButtonPress;if(!press||press.pointer!==e.pointerId)return;touchButtonPress=null;
- const hit=document.elementFromPoint(e.clientX,e.clientY)?.closest('button,summary');
+ const hit=document.elementFromPoint(e.clientX,e.clientY)?touchActivationTarget(document.elementFromPoint(e.clientX,e.clientY)):null;
  if(press.moved||hit!==press.button||press.button.disabled)return;
  e.preventDefault();lastTouchButton={button:press.button,id:press.button.id,time:performance.now()};
  press.button.click();
 },true);
 document.addEventListener('pointercancel',()=>{touchButtonPress=null;},true);
 document.addEventListener('click',e=>{
- const button=e.target.closest('button,summary'),last=lastTouchButton;
+ const button=touchActivationTarget(e.target),last=lastTouchButton;
  if(e.isTrusted&&e.detail>0&&last&&performance.now()-last.time<750&&(button===last.button||(button?.id&&button.id===last.id))&&(e.pointerType!=='mouse'||e.sourceCapabilities?.firesTouchEvents)){
   e.preventDefault();e.stopImmediatePropagation();
  }
