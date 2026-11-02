@@ -19,7 +19,7 @@ function earthPoint(){return {x:bench.width-48,y:440};}
 function terminal(){const s=sphere();return {x:s.x+s.r*.68,y:s.y+s.r*.68};}
 function halfSize(o){return (o.id==='ball'?65:100)*scaleBench();}
 function objectCharge(o){return 12-o.e;}
-function systemCharge(){return bench.objects.reduce((n,o)=>n+objectCharge(o),0)+(state.mode==='materials'?0:12-bench.electrons+bench.earth)+bench.removedCharge;}
+function systemCharge(){if(state.mode==='induction')return freeSystemCharge();return bench.objects.reduce((n,o)=>n+objectCharge(o),0)+(state.mode==='materials'?0:12-bench.electrons+bench.earth)+bench.removedCharge;}
 function chargeLabel(q){return Math.abs(q)<EPS?'中性':(q>0?'＋':'−')+Number(Math.abs(q).toFixed(4))+' 格';}
 function sourceObject(){return bench.objects.find(o=>o.uid===bench.quiz?.source);}
 function surfaceGap(o){const s=sphere();return Math.hypot(s.x-o.x,s.y-o.y)-s.r-halfSize(o);}
@@ -62,6 +62,7 @@ function addObject(id,x,y,charge=0){
 }
 function initBench(){
  benchSize();Object.assign(bench,{objects:[],electrons:12,earth:0,ground:false,cable:earthPoint(),drag:null,flight:null,selected:null,travel:0,contact:null,removedCharge:0,importedCharge:0,message:'',events:[],quiz:null});
+ if(state.mode==='induction')initFreeBench();
  if(state.mode==='quiz'){
   bench.quiz={task:quizTask,source:null,initialCharge:quizSign*6,flags:{},invalid:'',passed:false,feedback:'尚未檢查。請直接操作指定帶電球與目標球。'};
   const o=addObject('ball',bench.width<600?80:170,135,bench.quiz.initialCharge);bench.quiz.source=o.uid;
@@ -107,7 +108,8 @@ function buildBenchControls(){
    const output=html('output',{id:'ballChargeRead',for:'ballCharge'},chargeLabel(ballSetting));range.oninput=()=>{ballSetting=+range.value;output.textContent=chargeLabel(ballSetting);};
    const tile=makeTile(ballKind);tile.id='chargedBallTile';tile.dataset.source='ball';
    source.append(label,output,range,tile,html('p',{class:'note'},'先設定正／負電量，再把球拖進桌面。此設定只作用於下一顆球；不會改變桌上物品。'));
-   c.append(source);
+   const addScope=html('button',{id:'addElectroscope',class:'primary'},'加入金箔驗電器');addScope.onclick=()=>addFreeElectroscope();
+   c.append(source,addScope,html('p',{class:'note'},'目標球與驗電器可拖動、刪除。接地夾拖到任一綠色接點；拖開即斷地。驗電器只有金屬帽接觸會傳電，玻璃外殼與絕緣塞不導電。'));
   }
   c.append(html('p',{class:'note'},state.mode==='materials'?'三種材質各自拖入，接觸後來回摩擦。塑膠在此假設為乾燥聚乙烯表面；摩擦序列只作教學示意。':'自行摩擦材質，或拖入外部已帶電的導電球。靠近、接觸目標球；拖動綠夾接地或斷地。＋背景固定，只有 − 轉移。'));
  }
@@ -172,6 +174,7 @@ function electronPositions(){
 }
 function renderBench(){
  if(!benchModes.includes(state.mode))return;
+ if(state.mode==='induction'){renderFreeBench();return;}
  const svg=$('exploreSvg'),induction=state.mode!=='materials';svg.setAttribute('viewBox',`0 0 ${bench.width} 540`);svg.setAttribute('aria-label',state.mode==='quiz'?'測驗模式：操作指定帶電球、目標球與接地夾':induction?'自由操作起電：拖動材質、帶電球與接地夾':'摩擦起電：拖入毛皮、玻璃、塑膠後摩擦');svg.replaceChildren();
  svg.append(el('rect',{x:8,y:45,width:bench.width-16,height:475,rx:22,fill:'#f0f4ea',stroke:'#cbd9ca','stroke-dasharray':'7 7'}));
  $('sceneTitle').textContent=state.mode==='quiz'?'測驗模式 · '+(quizTask==='contact'?'接觸起電':'感應起電'):induction?'自由操作起電':'摩擦起電';
@@ -228,12 +231,14 @@ function friction(o,dist){
 function contactNow(o){return state.mode!=='materials'&&benchModes.includes(state.mode)&&bench.objects.includes(o)&&Math.abs(surfaceGap(o))<7&&Math.abs(o.y-sphere().y)<sphere().r*.9;}
 function cancelFlight(){if(!bench.flight||bench.flight.returning)return;const f=bench.flight;f.returnFraction=clamp((performance.now()-f.start)/f.duration,0,1);f.returning=true;f.start=performance.now();f.duration=Math.max(100,750*f.returnFraction);}
 function placeObject(o,x,y){
+ if(state.mode==='induction'){placeFreeSource(o,x,y);return;}
  o.x=clamp(x,75,bench.width-75);o.y=clamp(y,105,390);
  if(state.mode==='materials')return;
  const s=sphere(),min=s.r+halfSize(o),dx=o.x-s.x,dy=o.y-s.y,d=Math.hypot(dx,dy);
  if(d<min){o.x=clamp(s.x+dx/(d||1)*min,75,bench.width-75);o.y=clamp(s.y+dy/(d||1)*min,105,390);if(Math.hypot(o.x-s.x,o.y-s.y)<min-1){o.x=s.x-min;o.y=s.y;}}
 }
 function refreshContact(o){
+ if(state.mode==='induction')return;
  if(state.mode==='materials')return;
  if(contactNow(o)){
   if(!bench.contact||bench.contact.object!==o){
@@ -248,11 +253,13 @@ function moveObject(o,x,y){
  const previous={x:o.x,y:o.y};placeObject(o,x,y);refreshContact(o);
  if(bench.flight?.reason==='friction'&&!touchingMaterials(bench.flight.from,bench.flight.to))cancelFlight();
  friction(o,Math.hypot(o.x-previous.x,o.y-previous.y));
- if(o.uid===bench.quiz?.source)record('source-move');renderBench();
+ if(o.uid===bench.quiz?.source)record('source-move');if(state.mode==='induction'&&bench.flight&&!freeFlightValid(bench.flight))bench.flight=null;renderBench();
 }
 function removeObject(uid){
+ if(state.mode==='induction'&&String(uid).startsWith('conductor:')){removeFreeConductor(String(uid).slice(10));return;}
  const o=bench.objects.find(o=>o.uid===uid);if(!o)return;
  if(bench.flight&&(bench.flight.from===o||bench.flight.to===o))bench.flight=null;
+ if(state.mode==='induction')for(const[key,c]of bench.free.contacts)if(c.a===o||c.b===o)bench.free.contacts.delete(key);
  if(bench.contact?.object===o)bench.contact=null;if(bench.drag?.o===o)bench.drag=null;
  bench.removedCharge+=objectCharge(o);bench.objects=bench.objects.filter(v=>v!==o);bench.selected=null;record('remove',{uid});
  bench.message='物品已移出；電荷隨物品帶走。';renderBench();
@@ -272,6 +279,7 @@ document.addEventListener('pointerup',e=>{
 document.addEventListener('pointercancel',()=>{clearTray();bench.drag=null;});
 const svgBench=$('exploreSvg');
 svgBench.addEventListener('pointerdown',e=>{
+ if(state.mode==='induction'&&freePointerDown(e))return;
  const removal=e.target.closest('[data-remove]');if(removal){e.preventDefault();removeObject(+removal.dataset.remove);return;}
  const object=e.target.closest('[data-object]'),clip=e.target.closest('[data-clip]');if(!object&&!clip)return;
  e.preventDefault();const p=point(e,svgBench);
@@ -285,9 +293,12 @@ svgBench.addEventListener('pointerdown',e=>{
 });
 svgBench.addEventListener('pointermove',e=>{
  if(!bench.drag)return;const p=point(e,svgBench),d=bench.drag;
+ if(state.mode==='induction'&&d.type==='free-clip'){bench.cable={x:clamp(p.x,25,875),y:clamp(p.y,70,475)};renderFreeBench();return;}
+ if(state.mode==='induction'&&d.type==='conductor'){moveFreeConductor(d.c,p.x+d.dx,p.y+d.dy);return;}
  if(d.type==='clip'){bench.cable={x:clamp(p.x,25,bench.width-25),y:clamp(p.y,85,475)};renderBench();}else moveObject(d.o,p.x+d.dx,p.y+d.dy);
 });
 function endBenchDrag(){
+ if(state.mode==='induction'){endFreeDrag();return;}
  if(bench.drag?.type==='clip'){
   const t=terminal();bench.ground=Math.hypot(bench.cable.x-t.x,bench.cable.y-t.y)<54;
   if(bench.ground){if(bench.flight?.reason==='contact')cancelFlight();bench.cable=t;record('ground-connect');if(bench.contact)bench.contact=null;}
@@ -296,6 +307,7 @@ function endBenchDrag(){
 }
 svgBench.addEventListener('pointerup',endBenchDrag);svgBench.addEventListener('pointercancel',()=>{if(bench.drag)endBenchDrag();});svgBench.addEventListener('lostpointercapture',()=>{if(bench.drag)endBenchDrag();});
 svgBench.addEventListener('keydown',e=>{
+ if(state.mode==='induction'&&freeKeyDown(e))return;
  const g=e.target.closest('[data-object]');if(!g||!['ArrowLeft','ArrowRight','ArrowUp','ArrowDown'].includes(e.key))return;
  e.preventDefault();const o=bench.objects.find(o=>o.uid===+g.dataset.object);moveObject(o,o.x+(e.key==='ArrowLeft'?-20:e.key==='ArrowRight'?20:0),o.y+(e.key==='ArrowUp'?-20:e.key==='ArrowDown'?20:0));svgBench.querySelector(`[data-object="${o.uid}"]`)?.focus();
 });
@@ -304,7 +316,7 @@ document.addEventListener('keydown',e=>{
  if(['Delete','Backspace'].includes(e.key)&&benchModes.includes(state.mode)&&!e.target.closest('input,select,textarea,[contenteditable]')){e.preventDefault();removeObject(bench.selected);}
 });
 function benchTick(t){
- if(benchModes.includes(state.mode)){
+ if(state.mode==='induction'){freeTick(t);}else if(benchModes.includes(state.mode)){
   if(bench.flight){
    if(bench.flight.reason==='ground'&&!bench.flight.returning){const delta=12+Math.round(influence()*6)-bench.electrons;if(!bench.ground||Math.abs(delta)<EPS||(delta>0)!==(bench.flight.to==='sphere'))cancelFlight();}
    if(t-bench.flight.start>=bench.flight.duration){finishTransfer();renderBench();}
@@ -352,3 +364,192 @@ window.addEventListener('resize',()=>{if(benchModes.includes(state.mode))renderB
 $('rub').hidden=true;$('release').hidden=true;
 window.directBench={bench,matter,influence,electronPositions,systemCharge};
 requestAnimationFrame(benchTick);
+
+// Free bench conductors: separate net charge, polarization, and contact capacitance.
+// Quiz keeps its original fixed target and original solver above.
+function initFreeBench(){
+ bench.free={conductors:[{uid:'target',type:'sphere',x:621,y:245,e:12,base:12,capacity:1,r:110}],groundId:null,contacts:new Map()};
+}
+function freeConductors(){return bench.free?.conductors||[];}
+function freeCharge(c){return c.base-c.e;}
+function freeOwnerCharge(o){return o.base===undefined?objectCharge(o):freeCharge(o);}
+function freeCapacity(o){return o.base===undefined?1:o.capacity;}
+function freeCenter(c){return{x:c.x,y:c.type==='scope'?c.y-85:c.y};}
+function freeRadius(o){return o.base===undefined?halfSize(o):o.r;}
+function freeEndpoint(o){if(o==='earth')return earthPoint();return o.base===undefined?{x:o.x,y:o.y}:freeCenter(o);}
+function freeTerminal(c){const p=freeCenter(c);return c.type==='scope'?{x:p.x+36,y:p.y+8}:{x:c.x+c.r*.68,y:c.y+c.r*.68};}
+function freeGroundOwner(){return freeConductors().find(c=>c.uid===bench.free.groundId);}
+function freeGap(a,b){
+ const material=[a,b].find(o=>o.base===undefined&&o.id!=='ball');
+ if(material){const c=material===a?b:a,p=freeEndpoint(c),dx=Math.abs(p.x-material.x)-76,dy=Math.abs(p.y-material.y)-36;return Math.hypot(Math.max(dx,0),Math.max(dy,0))+Math.min(Math.max(dx,dy),0)-24-freeRadius(c);}
+ const p=freeEndpoint(a),q=freeEndpoint(b);return Math.hypot(p.x-q.x,p.y-q.y)-freeRadius(a)-freeRadius(b);
+}
+function freeTouch(a,b){return Math.abs(freeGap(a,b))<1.5;}
+function freeField(c){
+ let p=0;for(const o of [...bench.objects,...freeConductors()]){if(o===c)continue;const q=freeOwnerCharge(o),coupling=clamp((155-freeGap(c,o))/180,0,.85);p+=q*coupling;}
+ return clamp(p,-8,8);
+}
+function freeLeafState(c){
+ const q=freeCharge(c),field=freeField(c),leaf=clamp(.45*(q+field),-10,10),cap=q-leaf;
+ return{net:q,field,leaf,cap,angle:Math.min(52,Math.abs(leaf)*10)};
+}
+function freeSystemCharge(){return bench.objects.reduce((n,o)=>n+objectCharge(o),0)+freeConductors().reduce((n,c)=>n+freeCharge(c),0)+bench.earth+bench.removedCharge;}
+function syncFreeBench(){const target=freeConductors().find(c=>c.uid==='target');bench.electrons=target?target.e:12;bench.ground=!!freeGroundOwner();}
+function addFreeElectroscope(){
+ if(state.mode!=='induction')return;
+ const count=freeConductors().filter(c=>c.type==='scope').length,c={uid:'scope'+bench.next++,type:'scope',x:360+(count%2)*180,y:240,e:24,base:24,capacity:.6,r:30};
+ freeConductors().push(c);bench.selected='conductor:'+c.uid;bench.message='已加入中性金箔驗電器：帶電物靠近金屬帽，觀察兩葉；接觸帽或拖接地夾到綠接點可交換電子。';renderFreeBench();
+}
+function removeFreeConductor(uid){
+ const c=freeConductors().find(v=>v.uid===uid);if(!c)return;
+ if(bench.flight&&(bench.flight.from===c||bench.flight.to===c||bench.flight.via===c))bench.flight=null;
+ if(bench.drag?.c===c)bench.drag=null;
+ if(bench.free.groundId===uid){bench.free.groundId=null;bench.cable=earthPoint();}
+ bench.removedCharge+=freeCharge(c);bench.free.conductors=freeConductors().filter(v=>v!==c);for(const[key,contact]of bench.free.contacts)if(contact.a===c||contact.b===c)bench.free.contacts.delete(key);bench.contact=null;bench.selected=null;
+ bench.message='物品已移出，淨電荷隨物品帶走；相關轉移及接地已取消。重置可恢復目標球。';syncFreeBench();renderFreeBench();
+}
+function placeFreeSource(o,x,y){
+ o.x=clamp(x,75,825);o.y=clamp(y,105,390);
+ for(let pass=0;pass<3;pass++)for(const c of freeConductors()){
+  const gap=freeGap(c,o);if(gap>=0)continue;const ox=o.x,oy=o.y;o.x+=.1;const gx=(freeGap(c,o)-gap)/.1;o.x=ox;o.y+=.1;const gy=(freeGap(c,o)-gap)/.1;o.y=oy;const norm=Math.hypot(gx,gy)||1;o.x=clamp(o.x-gx/norm*gap,75,825);o.y=clamp(o.y-gy/norm*gap,105,390);
+ }
+}
+function moveFreeConductor(c,x,y){
+ c.x=clamp(x,c.type==='sphere'?120:90,c.type==='sphere'?780:810);c.y=clamp(y,c.type==='sphere'?155:180,c.type==='sphere'?315:300);
+ // Solid metal heads cannot pass through other heads or source objects.
+ for(let pass=0;pass<3;pass++)for(const o of [...bench.objects,...freeConductors()]){if(o===c)continue;const gap=freeGap(c,o);if(gap>=0)continue;const ox=c.x,oy=c.y;c.x+=.1;const gx=(freeGap(c,o)-gap)/.1;c.x=ox;c.y+=.1;const gy=(freeGap(c,o)-gap)/.1;c.y=oy;const norm=Math.hypot(gx,gy)||1;c.x-=gx/norm*gap;c.y-=gy/norm*gap;}
+ c.x=clamp(c.x,c.type==='sphere'?120:90,c.type==='sphere'?780:810);c.y=clamp(c.y,c.type==='sphere'?155:180,c.type==='sphere'?315:300);
+ if(bench.flight&&!freeFlightValid(bench.flight))bench.flight=null;bench.message='';renderFreeBench();
+}
+function freePairs(){
+ const list=[];for(const c of freeConductors())for(const o of bench.objects)if(freeTouch(c,o))list.push({a:c,b:o});
+ const cs=freeConductors();for(let i=0;i<cs.length;i++)for(let j=i+1;j<cs.length;j++)if(freeTouch(cs[i],cs[j]))list.push({a:cs[i],b:cs[j]});
+ return list;
+}
+function freeStart(from,to,reason,amount,via=null){
+ if(bench.flight||amount<EPS)return;bench.flight={from,to,reason,amount:Math.min(1,amount),start:performance.now(),duration:500,free:true,via};
+}
+function freeFlightPosition(t){
+ const f=bench.flight,p=clamp((t-f.start)/f.duration,0,1);
+ if(f.reason==='ground'){const c=f.via,head=freeCenter(c),end=freeTerminal(c),earth=earthPoint(),u=f.from==='earth'?1-p:p;
+  if(u<.25)return{x:head.x+(end.x-head.x)*u*4,y:head.y+(end.y-head.y)*u*4};
+  const v=(u-.25)/.75;return{x:(1-v)**2*end.x+2*(1-v)*v*(earth.x-90)+v*v*earth.x,y:(1-v)**2*end.y+2*(1-v)*v*(earth.y-15)+v*v*earth.y};
+ }
+ const a=freeEndpoint(f.from),b=freeEndpoint(f.to);return{x:a.x+(b.x-a.x)*p,y:a.y+(b.y-a.y)*p};
+}
+function freeFlightValid(f){
+ if(f.from!=='earth'&&!bench.objects.includes(f.from)&&!freeConductors().includes(f.from))return false;
+ if(f.to!=='earth'&&!bench.objects.includes(f.to)&&!freeConductors().includes(f.to))return false;
+ if(f.reason==='ground'){
+  if(freeGroundOwner()!==f.via)return false;const delta=-freeField(f.via)-freeCharge(f.via);
+  return Math.abs(delta)>EPS&&((delta>0)===(f.from===f.via));
+ }
+ if(f.reason==='friction')return bench.objects.includes(f.from)&&bench.objects.includes(f.to)&&touchingMaterials(f.from,f.to);
+ return freeTouch(f.from,f.to);
+}
+function freeTick(t){
+ if(!bench.free)return;
+ const pairs=freePairs(),active=new Set(pairs.map(({a,b})=>a.uid+':'+b.uid));
+ for(const key of bench.free.contacts.keys())if(!active.has(key))bench.free.contacts.delete(key);
+ if(bench.flight&&!bench.flight.free){ // Material friction starts through the original input path.
+  bench.flight.free=true;
+ }
+ if(bench.flight){const f=bench.flight;
+  if(!freeFlightValid(f)){bench.flight=null;renderFreeBench();}
+  else if(t-f.start>=f.duration){
+   const change=(o,d)=>{if(o==='earth')bench.earth-=d;else o.e+=d;};change(f.from,-f.amount);change(f.to,f.amount);bench.flight=null;syncFreeBench();renderFreeBench();
+  }else if(state.show){const pos=freeFlightPosition(t);$('singleElectron')?.setAttribute('transform',`translate(${pos.x} ${pos.y})`);}
+ }
+ if(bench.flight)return;
+ const ground=freeGroundOwner();if(ground){const delta=-freeField(ground)-freeCharge(ground);
+  if(Math.abs(delta)>EPS){freeStart(delta>0?ground:'earth',delta>0?'earth':ground,'ground',Math.abs(delta),ground);renderFreeBench();return;}
+ }
+ bench.contact=null;
+ for(const {a,b}of pairs){
+  const key=a.uid+':'+b.uid;let contact=bench.free.contacts.get(key);
+  if(!contact){
+   const qa=freeCharge(a),qb=freeOwnerCharge(b),conductor=b.base!==undefined||b.id==='ball';
+   const target=conductor?(qa+qb)*a.capacity/(a.capacity+freeCapacity(b)):qa+qb*.25;
+   contact={a,b,target,settled:false};bench.free.contacts.set(key,contact);
+  }
+  bench.contact=contact;
+  if(b.base!==undefined||b.id==='ball')contact.target=(freeCharge(a)+freeOwnerCharge(b))*a.capacity/(a.capacity+freeCapacity(b));
+  const delta=freeCharge(a)-contact.target;
+  if(Math.abs(delta)>EPS){freeStart(delta>0?b:a,delta>0?a:b,'contact',Math.abs(delta));renderFreeBench();return;}
+  contact.settled=true;
+ }
+}
+function freePointerDown(e){
+ const removal=e.target.closest('[data-conductor-remove]');if(removal){e.preventDefault();removeFreeConductor(removal.dataset.conductorRemove);return true;}
+ const node=e.target.closest('[data-conductor]'),clip=e.target.closest('[data-clip]');if(!node&&!clip)return false;
+ e.preventDefault();const p=point(e,svgBench);
+ if(clip){bench.free.groundId=null;bench.ground=false;if(bench.flight?.reason==='ground')bench.flight=null;bench.drag={type:'free-clip'};bench.cable={x:p.x,y:p.y};}
+ else{const c=freeConductors().find(v=>v.uid===node.dataset.conductor);if(!c)return true;bench.selected='conductor:'+c.uid;bench.drag={type:'conductor',c,dx:c.x-p.x,dy:c.y-p.y};}
+ svgBench.setPointerCapture(e.pointerId);renderFreeBench();return true;
+}
+function endFreeDrag(){
+ if(bench.drag?.type==='free-clip'){
+  const c=freeConductors().find(c=>{const p=freeTerminal(c);return Math.hypot(p.x-bench.cable.x,p.y-bench.cable.y)<44;});
+  bench.free.groundId=c?.uid||null;if(c)bench.cable=freeTerminal(c);
+ }
+ bench.drag=null;syncFreeBench();renderFreeBench();
+}
+function freeKeyDown(e){
+ const remove=e.target.closest('[data-conductor-remove]');if(remove&&['Enter',' '].includes(e.key)){e.preventDefault();removeFreeConductor(remove.dataset.conductorRemove);return true;}
+ const g=e.target.closest('[data-conductor]');if(!g||!['ArrowLeft','ArrowRight','ArrowUp','ArrowDown'].includes(e.key))return false;
+ e.preventDefault();const c=freeConductors().find(c=>c.uid===g.dataset.conductor);if(!c)return true;bench.selected='conductor:'+c.uid;
+ moveFreeConductor(c,c.x+(e.key==='ArrowLeft'?-20:e.key==='ArrowRight'?20:0),c.y+(e.key==='ArrowUp'?-20:e.key==='ArrowDown'?20:0));svgBench.querySelector(`[data-conductor="${c.uid}"]`)?.focus();return true;
+}
+function freeRemoveHandle(g,c,x,y){
+ const r=el('g',{'data-conductor-remove':c.uid,transform:`translate(${x} ${y})`,tabindex:0,role:'button','aria-label':'刪除'+(c.type==='scope'?'金箔驗電器':'目標金屬球'),class:'removeObject'});
+ r.append(el('circle',{r:30,fill:'transparent','pointer-events':'all'}),el('circle',{r:15,fill:'#fffdf6',stroke:'#966c5a','stroke-width':2}),el('text',{x:0,y:1,'text-anchor':'middle','dominant-baseline':'central','font-size':24,fill:'#8e4537'},'×'));g.append(r);
+}
+function weightedElectrons(g,n,slots,region,owner){
+ for(let i=0;i<Math.ceil(Math.max(0,n)/2);i++){const s=slots[i%slots.length],level=Math.floor(i/slots.length),weight=Math.min(2,n-i*2);const m=chargeText(g,s.x+level*8,s.y+level*4,false,{'data-conductor-electron':owner,'data-region':region,'data-charge-weight':weight,opacity:weight/2});m.querySelector('circle').setAttribute('r',5.5);m.querySelector('text').style.fontSize='10px';}
+}
+function freeRegionElectrons(g,n,slots,region,uid,neutral){
+ if(n<EPS)return;for(const p of slots){const mark=chargeText(g,p.x,p.y,false,{'data-conductor-electron':uid,'data-region':region,'data-charge-weight':n/slots.length,opacity:clamp(n/neutral,0,1)});mark.querySelector('circle').setAttribute('r',5.5);mark.querySelector('text').style.fontSize='10px';}
+}
+function drawFreeScope(c){
+ const f=freeLeafState(c),g=el('g',{'data-conductor':c.uid,'data-electroscope':c.uid,'data-net-charge':f.net,'data-leaf-charge':f.leaf,'data-leaf-angle':f.angle,transform:`translate(${c.x} ${c.y})`,tabindex:0,role:'button','aria-label':'金箔驗電器，'+chargeLabel(f.net)+'，拖曳或方向鍵移動',class:'benchObject'});
+ g.append(el('rect',{x:-83,y:-40,width:166,height:180,rx:22,fill:'#fafdff99',stroke:'#8aabad','stroke-width':3,'data-glass-case':true}),el('rect',{x:-34,y:-50,width:68,height:25,rx:7,fill:'#b79072',stroke:'#896b56','data-insulator':true}),el('path',{d:'M0 -74V21',stroke:'#64827e','stroke-width':10,'data-metal-stem':true}),el('ellipse',{cx:0,cy:-85,rx:30,ry:30,fill:'#c8d9d7',stroke:'#638783','stroke-width':3,'data-metal-cap':true}),el('path',{d:'M-90 145H90',stroke:'#7b908c','stroke-width':12}));
+ if(state.show){
+  const slots=[-20,0,20].map(x=>({x,y:-94}));
+  slots.forEach(p=>{const m=chargeText(g,p.x,p.y,true,{'data-conductor-ion':c.uid,'data-region':'cap','data-charge-weight':4});m.querySelector('circle').setAttribute('r',6);m.querySelector('text').style.fontSize='10px';});
+  freeRegionElectrons(g,12-f.cap,slots.map(p=>({x:p.x,y:-76})),'cap',c.uid,12);
+
+ }
+ for(const side of [-1,1]){
+  const leaf=el('g',{transform:`translate(0 20) rotate(${-side*f.angle})`,'data-gold-leaf':side,'data-charge':f.leaf/2});leaf.append(el('path',{d:`M${side*3} 0L${side*3} 102`,stroke:'#bd8e20','stroke-width':7,'stroke-linecap':'round'}));
+  if(state.show){const slots=[{x:side*3,y:26},{x:side*3,y:54},{x:side*3,y:82}];slots.forEach((p,i)=>{const m=chargeText(leaf,p.x-7,p.y,true,{'data-conductor-ion':c.uid,'data-region':'leaf'+side,'data-charge-weight':2});m.querySelector('circle').setAttribute('r',5.5);m.querySelector('text').style.fontSize='10px';});freeRegionElectrons(leaf,6-f.leaf/2,slots.map(p=>({x:p.x+7,y:p.y+8})),'leaf'+side,c.uid,6);}
+  g.append(leaf);
+ }
+ g.append(el('text',{x:0,y:-129,'text-anchor':'middle','font-size':16,fill:Math.abs(f.cap)<EPS?'#355d59':f.cap>0?'#b1342d':'#176bb5','data-cap-charge':f.cap},'金屬帽：'+chargeLabel(f.cap)),el('text',{x:0,y:175,class:'benchLabel','font-size':17},'金箔驗電器 · '+chargeLabel(f.net)),el('text',{x:0,y:196,'text-anchor':'middle','font-size':15,fill:'#355d59'},Math.abs(f.leaf)>EPS?'葉各 '+chargeLabel(f.leaf/2)+(Math.abs(f.net)<EPS?' · 中性感應':''):'兩葉閉合'));
+ freeRemoveHandle(g,c,92,-55);return g;
+}
+function drawFreeSphere(c){
+ const g=el('g',{'data-conductor':c.uid,'data-target-sphere':true,'data-net-charge':freeCharge(c),transform:`translate(${c.x} ${c.y})`,tabindex:0,role:'button','aria-label':'可移動目標金屬球，'+chargeLabel(freeCharge(c)),class:'benchObject'}),field={x:0,y:0};
+ for(const o of [...bench.objects,...freeConductors()]){if(o===c)continue;const a=freeEndpoint(o),dx=a.x-c.x,dy=a.y-c.y,d=Math.hypot(dx,dy)||1,k=freeOwnerCharge(o)*clamp((155-freeGap(c,o))/180,0,.85)/8;field.x+=k*dx/d;field.y+=k*dy/d;}
+ g.append(el('rect',{x:-16,y:c.r-3,width:32,height:55,fill:'#bac8bf'}),el('circle',{r:c.r,fill:'#dae7e5',stroke:'#638783','stroke-width':3}));
+ if(state.show){ionSlots.forEach((pos,i)=>chargeText(g,pos.x,pos.y,true,{'data-sphere-ion':i,'data-conductor-ion':c.uid,'data-charge-weight':1}));
+  for(let i=0;i<c.e;i++){const row=i%6,col=Math.floor(i/6),x=(col-.5)*38+clamp(field.x,-1,1)*42,y=(row-2.5)*24+clamp(field.y,-1,1)*24;const m=chargeText(g,x,y,false,{'data-sphere-electron':i,'data-charge-weight':Math.min(1,c.e-i),opacity:Math.min(1,c.e-i)});m.querySelector('circle').setAttribute('r',6);m.querySelector('text').style.fontSize='11px';}
+ }
+ g.append(el('text',{x:0,y:-c.r-28,class:'benchLabel','data-target-charge':freeCharge(c)},'目標金屬球 · '+chargeLabel(freeCharge(c))));freeRemoveHandle(g,c,c.r+10,-c.r+10);return g;
+}
+function renderFreeBench(){
+ if(state.mode!=='induction'||!bench.free)return;syncFreeBench();const svg=$('exploreSvg'),focus=document.activeElement?.dataset.conductor;svg.setAttribute('viewBox','0 0 900 540');svg.replaceChildren();
+ svg.append(el('rect',{x:8,y:45,width:884,height:475,rx:22,fill:'#f0f4ea',stroke:'#cbd9ca','stroke-dasharray':'7 7'}));
+ $('sceneTitle').textContent='自由操作起電';$('exploreHint').textContent='拖動金屬球／驗電器；帶電物接觸金屬帽才會交換電子，綠夾可接任一接點';
+ for(const c of freeConductors())svg.append(c.type==='scope'?drawFreeScope(c):drawFreeSphere(c));
+ const earth=earthPoint(),owner=freeGroundOwner(),end=owner?freeTerminal(owner):bench.cable;
+ svg.append(el('path',{d:`M${earth.x} ${earth.y}Q${earth.x-90} ${earth.y-15} ${end.x} ${end.y}`,stroke:'#368069','stroke-width':6,fill:'none','data-earth-cable':true}),el('path',{d:`M${earth.x} ${earth.y}v17m-22 0h44m-16 9h24m-18 9h12`,stroke:'#368069','stroke-width':4,fill:'none'}),el('text',{x:earth.x-15,y:505,class:'benchLabel'},'大地'));
+ for(const c of freeConductors()){const t=freeTerminal(c);svg.append(el('circle',{cx:t.x,cy:t.y,r:13,fill:'#fff',stroke:'#368069','stroke-width':3,'data-terminal':c.uid}));}
+ const clip=el('g',{'data-clip':true,transform:`translate(${end.x} ${end.y})`,tabindex:0,role:'button','aria-label':'拖綠夾到接點接地，拖開斷地',class:'groundClip'});clip.append(el('circle',{r:30,fill:'transparent','pointer-events':'all'}),el('circle',{r:21,fill:'#e1f2dd',stroke:'#368069','stroke-width':3}),el('path',{d:'M-9 -10L9 10M9 -10L-9 10',stroke:'#368069','stroke-width':4}));svg.append(clip);
+ for(const o of bench.objects)svg.append(drawObject(o));
+ if(bench.flight&&state.show){const p=freeFlightPosition(performance.now()),g=el('g',{id:'singleElectron',transform:`translate(${p.x} ${p.y})`});chargeText(g,0,0,false);g.append(el('text',{x:0,y:-20,'font-size':14,fill:'#176bb5'},Number(bench.flight.amount.toFixed(4))+' 格'));svg.append(g);}
+ if(focus)svg.querySelector(`[data-conductor="${focus}"]`)?.focus({preventScroll:true});
+ const selected=String(bench.selected||'');$('removeSelected').disabled=!(bench.objects.some(o=>o.uid===bench.selected)||freeConductors().some(c=>'conductor:'+c.uid===selected));
+ $('benchRead').textContent=[...bench.objects.map(o=>kind(o.id).name+'：'+chargeLabel(objectCharge(o))),...freeConductors().map(c=>(c.type==='scope'?'驗電器':'目標球')+'：'+chargeLabel(freeCharge(c))+(owner===c?'（接地中）':'')),'大地：'+chargeLabel(bench.earth),'守恆核對：'+Number((freeSystemCharge()-bench.importedCharge).toFixed(6))+' 格'].join('\n');
+ $('status').textContent=bench.flight?'電子沿實際接觸或接地路徑逐格轉移；分開即取消未完成轉移。':owner?'接地中：先斷地再移開來源可留下異號電；先移開則電子回流。':bench.message||'靠近先觀察感應；接觸才轉移。金箔張開不一定代表驗電器有淨電荷。';
+}
+Object.assign(window.directBench,{freeCharge,freeField,freeLeafState,freeSystemCharge,freeCenter,freeTerminal});
