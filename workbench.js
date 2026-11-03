@@ -6,8 +6,8 @@ const matter=[
  {id:'silk',name:'絲絹',kind:'silk',color:'#d9b9d7',rank:1.5},
  {id:'plastic',name:'塑膠',kind:'rod',color:'#91bead',rank:2}
 ];
-const ballKind={id:'ball',name:'帶電球',kind:'ball',color:'#dee7e7',rank:null};
-const componentKinds=[{id:'electroscope',name:'金箔驗電器',kind:'scope-icon'},{id:'metal-sphere',name:'絕緣金屬球',kind:'sphere-icon'},{id:'earth',name:'大地／接地線',kind:'earth-icon'}];
+const ballKind={id:'ball',name:'帶電金屬球',kind:'ball',color:'#dee7e7',rank:null};
+const componentKinds=[{id:'electroscope',name:'金箔驗電器',kind:'scope-icon'},{id:'metal-sphere',name:'金屬球（絕緣支架）',kind:'sphere-icon'},{id:'earth',name:'大地／接地線',kind:'earth-icon'}];
 const kind=id=>id==='ball'?ballKind:matter.find(m=>m.id===id)||componentKinds.find(m=>m.id===id);
 const EPS=1e-7,benchModes=['materials','induction','quiz'];
 const bench={objects:[],electrons:12,earth:0,ground:false,cable:{x:0,y:0},drag:null,flight:null,next:1,travel:0,contact:null,removedCharge:0,importedCharge:0,message:'',width:900,selected:null,events:[],quiz:null};
@@ -32,32 +32,33 @@ function record(type,data={}){
  const event={type,...data};bench.events.push(event);
  const q=bench.quiz;if(state.mode!=='quiz'||!q)return;
  if(q.passed){q.passed=false;q.feedback='你已繼續操作，請重新檢查目前結果。';}
- if(type==='contact-start'){q.flags.contact=true;if(q.task==='induction')failQuiz('帶電球碰到目標球，這次已包含接觸起電。請重新挑戰感應起電。');}
+ if(type==='contact-start'){q.flags.contact=true;if(q.task==='induction')failQuiz('帶電金屬球碰到目標球，這次已包含接觸起電。請重新挑戰感應起電。');}
  if(type==='ground-connect'){
   if(q.task==='contact')failQuiz('接觸起電任務不使用接地。請重試，直接接觸並分開兩球。');
   else if(q.flags.near&&sourceNear())q.flags.grounded=true;
-  else failQuiz('接地前須先把帶電球靠近目標球，且保持不接觸。請重試。');
+  else failQuiz('接地前須先把帶電金屬球靠近目標球，且保持不接觸。請重試。');
  }
  if(type==='transfer'&&data.reason==='ground'&&q.flags.grounded&&sourceNear())q.flags.exchange=true;
  if(type==='transfer'&&data.reason==='contact')q.flags.transferred=true;
  if(type==='contact-settled')q.flags.settled=true;
  if(type==='ground-disconnect'&&q.task==='induction'){
   if(q.flags.exchange&&sourceNear()&&!data.pending)q.flags.disconnected=true;
-  else failQuiz('請先讓接地電子轉移完成，再保持帶電球靠近、拖開接地夾。請重試。');
+  else failQuiz('請先讓接地電子轉移完成，再保持帶電金屬球靠近、拖開接地夾。請重試。');
  }
  if(type==='source-move'){
   if(sourceNear()&&!bench.ground&&!q.flags.disconnected)q.flags.near=true;
   if(sourceFar()){
-   if(q.task==='induction'&&bench.ground)failQuiz('你先移開帶電球、仍保持接地，目標球將回到中性。請重試並先斷地。');
+   if(q.task==='induction'&&bench.ground)failQuiz('你先移開帶電金屬球、仍保持接地，目標球將回到中性。請重試並先斷地。');
    q.flags.far=true;
   }else q.flags.far=false;
  }
- if(type==='remove'&&data.uid===q.source)failQuiz('指定帶電球被刪除了，不能用替換物品完成任務。請重新挑戰。');
+ if(type==='remove'&&data.uid===q.source)failQuiz('指定帶電金屬球被刪除了，不能用替換物品完成任務。請重新挑戰。');
 }
 function addObject(id,x,y,charge=0){
  if(state.mode==='induction'&&componentKinds.some(m=>m.id===id))return addFreeComponent(id,x,y);
  if(!kind(id))return null;
  const o={uid:bench.next++,id,x:clamp(x,75,bench.width-75),y:clamp(y,105,390),e:12-charge};
+ if(id==='ball'&&state.mode==='induction')Object.assign(o,{base:12,capacity:1,r:65,type:'charged-sphere'});
  bench.objects.push(o);bench.selected=o.uid;bench.importedCharge+=charge;
  bench.message=charge?'這顆球在實驗桌外已帶電；拖入不是完成起電。請操作它影響中性目標球。':'拖曳物品與另一種材質接觸並來回摩擦。';
  if(state.mode!=='materials')placeObject(o,o.x,o.y);
@@ -67,7 +68,7 @@ function initBench(){
  benchSize();Object.assign(bench,{objects:[],electrons:12,earth:0,ground:false,cable:earthPoint(),drag:null,flight:null,selected:null,travel:0,contact:null,removedCharge:0,importedCharge:0,message:'',events:[],quiz:null});
  if(state.mode==='induction')initFreeBench();
  if(state.mode==='quiz'){
-  bench.quiz={task:quizTask,source:null,initialCharge:quizSign*6,flags:{},invalid:'',passed:false,feedback:'尚未檢查。請直接操作指定帶電球與目標球。'};
+  bench.quiz={task:quizTask,source:null,initialCharge:quizSign*6,flags:{},invalid:'',passed:false,feedback:'尚未檢查。請直接操作指定帶電金屬球與目標球。'};
   const o=addObject('ball',bench.width<600?80:170,135,bench.quiz.initialCharge);bench.quiz.source=o.uid;
  }
 }
@@ -95,8 +96,8 @@ function buildBenchControls(){
   }
   c.append(html('p',{class:'note'},'來源球電性（切換會開始新題）'),polarity);
   const initial=bench.quiz.initialCharge,targetSign=initial>0?'負':'正';
-  const instruction=html('p',{id:'quizGoal',class:'quizGoal'},quizTask==='contact'?`目標：用指定 ${chargeLabel(initial)} 帶電球接觸原本中性的目標球，等分享完成後移開；兩球各留下 ${chargeLabel(initial/2)}。不要接地。`:`目標：用指定 ${chargeLabel(initial)} 帶電球，讓原本中性的目標球不經接觸而留下${targetSign}電。先靠近、接地、等轉移完成，再斷地、移開帶電球。`);
-  c.append(instruction,html('p',{class:'note'},'指定球原本已帶電；得分對象是固定的中性目標球。沒有新增帶電球入口，不能以預設電量替代操作。'));
+  const instruction=html('p',{id:'quizGoal',class:'quizGoal'},quizTask==='contact'?`目標：用指定 ${chargeLabel(initial)} 帶電金屬球接觸原本中性的目標球，等分享完成後移開；兩球各留下 ${chargeLabel(initial/2)}。不要接地。`:`目標：用指定 ${chargeLabel(initial)} 帶電金屬球，讓原本中性的目標球不經接觸而留下${targetSign}電。先靠近、接地、等轉移完成，再斷地、移開帶電金屬球。`);
+  c.append(instruction,html('p',{class:'note'},'指定球原本已帶電；得分對象是固定的中性目標球。沒有新增帶電金屬球入口，不能以預設電量替代操作。'));
   const check=html('button',{id:'checkQuiz',class:'primary'},'檢查操作結果');check.onclick=checkQuiz;
   const retry=html('button',{id:'retryQuiz'},'重新挑戰本題');retry.onclick=()=>reset();
   c.append(html('ol',{id:'quizSteps',class:'quizSteps'}),check,html('p',{id:'quizFeedback',role:'status',class:'quizFeedback'}),retry);
@@ -106,7 +107,7 @@ function buildBenchControls(){
   c.append(tray);
   if(state.mode==='induction'){
    const source=html('div',{id:'sourceControls',class:'sourceControls'});
-   const label=html('label',{for:'ballCharge'},'直接帶電球（外部已帶電）');
+   const label=html('label',{for:'ballCharge'},'帶電金屬球（外部已帶電）');
    const range=html('input',{id:'ballCharge',type:'range',min:-8,max:8,step:1,value:ballSetting});
    const output=html('output',{id:'ballChargeRead',for:'ballCharge'},chargeLabel(ballSetting));range.oninput=()=>{ballSetting=+range.value;output.textContent=chargeLabel(ballSetting);};
    const tile=makeTile(ballKind);tile.id='chargedBallTile';tile.dataset.source='ball';
@@ -149,9 +150,8 @@ function drawObject(o){
   const visible=o.e-(bench.flight?.from===o&&!bench.flight.reserved?(bench.flight.amount||1):0);
   if(o.id==='ball'){
    // Sparse, fixed positive background. Each stationary ball glyph represents two units.
-   for(let i=0;i<6;i++){const a=i*Math.PI/3;chargeText(g,Math.cos(a)*45,Math.sin(a)*45,true,{'data-ion':o.uid+'-'+i,'data-charge-weight':2});}
-   const slots=[[0,0],[-22.5,0],[22.5,0],[-11.25,-20],[11.25,-20],[-11.25,20],[11.25,20],[-33.75,-20],[33.75,20],[-33.75,20]];
-   for(let i=0;i<visible/2;i++){const [x,y]=slots[i];chargeText(g,x,y,false,{opacity:Math.min(1,visible/2-i),'data-charge-weight':Math.min(2,visible-i*2)});}
+   for(let i=0;i<6;i++){const a=i*Math.PI/3;chargeText(g,Math.cos(a)*45,Math.sin(a)*45,true,{'data-ion':o.uid+'-'+i,'data-metal-ion':'ball:'+o.uid,'data-charge-weight':2});}
+   drawMetalElectronCloud(g,o);
   }else{
    ionSlots.forEach((p,i)=>chargeText(g,p.x-6,p.y,true,{'data-ion':o.uid+'-'+i}));
    for(let i=0;i<visible;i++){const p=i<12?{x:ionSlots[i].x+9,y:ionSlots[i].y+14}:{x:i<15?-85:85,y:[-40,0,40][(i-12)%3]};chargeText(g,p.x,p.y,false,{opacity:Math.min(1,visible-i)});}
@@ -167,27 +167,15 @@ function influence(){
  return clamp(value,-1,1);
 }
 function electronPositions(){
- const s=sphere(),n=bench.electrons,f=influence(),out=[];
- const ions=ionSlots.map(p=>({x:p.x*s.r/105,y:p.y*s.r/100})),slots=[];
- // Choose separated sites inside the conductor, keeping every fixed ion in place.
- // Sorting by the desired near/far position prevents ring-like electron arrangements.
- for(let y=-90;y<=90;y+=18)for(let x=-90;x<=90;x+=18){if(Math.hypot(x,y)>s.r-12||ions.some(p=>Math.hypot(x-p.x,y-p.y)<16))continue;slots.push({x,y});}
- for(let i=0;i<n;i++){
-  const row=i%6,col=Math.floor(i/6),y=(row-2.5)*s.r*.25,cols=Math.ceil(n/6),flatX=(col-(cols-1)/2)*s.r*.74;
-  const edge=Math.sqrt(Math.max(0,s.r*s.r*.8-y*y)),end=-Math.sign(f||1)*(edge-10-col*18);
-  const desired={x:flatX*(1-Math.abs(f))+end*Math.abs(f),y};
-  slots.sort((a,b)=>(a.x-desired.x)**2+(a.y-desired.y)**2-((b.x-desired.x)**2+(b.y-desired.y)**2));
-  const p=slots.shift();if(p)out.push({x:s.x+p.x,y:s.y+p.y});
- }
- return out;
+ const distribution=metalElectronDistribution('quiz-target');return distribution.positions.map(p=>({x:distribution.node.x+p.x,y:distribution.node.y+p.y}));
 }
 function renderBench(){
  if(!benchModes.includes(state.mode))return;
  if(state.mode==='induction'){renderFreeBench();return;}
- const svg=$('exploreSvg'),induction=state.mode!=='materials';svg.setAttribute('viewBox',`0 0 ${bench.width} 540`);svg.setAttribute('aria-label',state.mode==='quiz'?'測驗模式：操作指定帶電球、目標球與接地夾':induction?'自由操作起電：拖動材質、帶電球與接地夾':'摩擦起電：拖入毛皮、玻璃、塑膠後摩擦');svg.replaceChildren();
+ const svg=$('exploreSvg'),induction=state.mode!=='materials';svg.setAttribute('viewBox',`0 0 ${bench.width} 540`);svg.setAttribute('aria-label',state.mode==='quiz'?'測驗模式：操作指定帶電金屬球、目標球與接地夾':induction?'自由操作起電：拖動材質、帶電金屬球與接地夾':'摩擦起電：拖入毛皮、玻璃、塑膠後摩擦');svg.replaceChildren();
  svg.append(el('rect',{x:8,y:45,width:bench.width-16,height:475,rx:22,fill:'#f0f4ea',stroke:'#cbd9ca','stroke-dasharray':'7 7'}));
  $('sceneTitle').textContent=state.mode==='quiz'?'測驗模式 · '+(quizTask==='contact'?'接觸起電':'感應起電'):induction?'自由操作起電':'摩擦起電';
- $('exploreHint').textContent=state.mode==='quiz'?'直接拖動指定帶電球與接地夾，再按「檢查操作結果」':induction?'拖入物品，自由決定靠近、接觸、接地與斷地的順序':'從材料架拖入物品，兩物接觸並來回摩擦';
+ $('exploreHint').textContent=state.mode==='quiz'?'直接拖動指定帶電金屬球與接地夾，再按「檢查操作結果」':induction?'拖入物品，自由決定靠近、接觸、接地與斷地的順序':'從材料架拖入物品，兩物接觸並來回摩擦';
  if(induction){
   const s=sphere(),end=terminal(),earth=earthPoint();svg.append(el('rect',{x:s.x-18,y:s.y+s.r-5,width:36,height:100,fill:'#bac8bf'}),el('circle',{cx:s.x,cy:s.y,r:s.r,fill:'#dae7e5',stroke:'#638783','stroke-width':3,'data-target-sphere':true}),el('text',{x:s.x-(bench.width<600?45:0),y:485,class:'benchLabel'},'目標金屬球 · 絕緣支架'));
   const net=12-bench.electrons,polarity=Math.abs(net)<EPS?'neutral':net>0?'positive':'negative',color=polarity==='neutral'?'#355d59':net>0?'#c63e36':'#176bb5';
@@ -282,7 +270,7 @@ function removeObject(uid){
  if(state.mode==='induction'&&String(uid).startsWith('conductor:')){removeFreeConductor(String(uid).slice(10));return;}
  const o=bench.objects.find(o=>o.uid===uid);if(!o)return;
  if(bench.flight&&(bench.flight.from===o||bench.flight.to===o)){if(state.mode==='induction')cancelFreeFlight();else bench.flight=null;}
- if(state.mode==='induction')for(const[key,c]of bench.free.contacts)if(c.a===o||c.b===o)bench.free.contacts.delete(key);
+ if(state.mode==='induction'){for(const[key,c]of bench.free.contacts)if(c.a===o||c.b===o)bench.free.contacts.delete(key);if(bench.free.groundId===o.uid){bench.free.groundId=null;bench.cable=earthPoint();}if(bench.contact?.a===o||bench.contact?.b===o)bench.contact=null;}
  if(bench.contact?.object===o)bench.contact=null;if(bench.drag?.o===o)bench.drag=null;
  bench.removedCharge+=objectCharge(o);bench.objects=bench.objects.filter(v=>v!==o);bench.selected=null;record('remove',{uid});
  bench.message='物品已移出；電荷隨物品帶走。';renderBench();
@@ -362,10 +350,10 @@ function benchTick(t){
 function checkQuiz(){
  const q=bench.quiz;if(!q)return;const source=sourceObject(),flags=q.flags,sq=12-bench.electrons;
  let problem=q.invalid;
- if(!problem&&(!source||bench.flight||bench.ground))problem='請保留指定帶電球、等電子轉移結束，並確認接地已斷開。';
+ if(!problem&&(!source||bench.flight||bench.ground))problem='請保留指定帶電金屬球、等電子轉移結束，並確認接地已斷開。';
  if(!problem&&q.task==='contact'){
   if(!flags.contact||!flags.transferred||!flags.settled)problem='還沒有完成接觸與電荷分享。請將指定球碰到目標球，等待轉移停止。';
-  else if(contactNow(source)||!sourceFar())problem='電荷已分享，請把帶電球移遠，再檢查結果。';
+  else if(contactNow(source)||!sourceFar())problem='電荷已分享，請把帶電金屬球移遠，再檢查結果。';
   else if(Math.abs(sq-q.initialCharge/2)>EPS||Math.abs(objectCharge(source)-q.initialCharge/2)>EPS)problem=`兩球尚未各保留 ${chargeLabel(q.initialCharge/2)}。請重新挑戰，勿接地或改變指定物品。`;
  }else if(!problem){
   if(!flags.near||!flags.grounded||!flags.exchange||!flags.disconnected||!flags.far)problem='還沒有完成「靠近 → 接地並轉移 → 先斷地 → 移開」的有效過程。只靠近造成極化不算起電。';
@@ -376,7 +364,7 @@ function checkQuiz(){
 }
 function updateQuizUI(){
  if(state.mode!=='quiz'||!bench.quiz||!$('quizSteps'))return;
- const q=bench.quiz,f=q.flags,steps=q.task==='contact'?[['contact','曾實際接觸'],['transferred','發生接觸電子轉移'],['settled','分享完成並停止'],['far','來源球已移遠']]:[['near','帶電球靠近，保持不接觸'],['grounded','靠近後接地'],['exchange','電子經大地交換'],['disconnected','保持靠近，等轉移完再斷地'],['far','最後移開帶電球']];
+ const q=bench.quiz,f=q.flags,steps=q.task==='contact'?[['contact','曾實際接觸'],['transferred','發生接觸電子轉移'],['settled','分享完成並停止'],['far','來源球已移遠']]:[['near','帶電金屬球靠近，保持不接觸'],['grounded','靠近後接地'],['exchange','電子經大地交換'],['disconnected','保持靠近，等轉移完再斷地'],['far','最後移開帶電金屬球']];
  $('quizSteps').replaceChildren(...steps.map(([key,text])=>html('li',{'data-step':key,'data-done':!!f[key]},(f[key]?'✓ ':'○ ')+text)));
  $('quizFeedback').textContent=q.invalid||q.feedback;$('quizFeedback').dataset.result=q.passed?'pass':q.invalid?'invalid':'pending';
 }
@@ -402,7 +390,8 @@ function freeCenter(c){return{x:c.x,y:c.type==='scope'?c.y-85:c.y};}
 function freeRadius(o){return o.base===undefined?halfSize(o):o.r;}
 function freeEndpoint(o){if(o==='earth')return earthPoint();return o.base===undefined?{x:o.x,y:o.y}:freeCenter(o);}
 function freeTerminal(c){const p=freeCenter(c);return c.type==='scope'?{x:p.x+36,y:p.y+8}:{x:c.x+c.r*.68,y:c.y+c.r*.68};}
-function freeGroundOwner(){if(!bench.free?.earth)return null;return freeConductors().find(c=>c.uid===bench.free.groundId);}
+function electricalConductors(){return [...freeConductors(),...bench.objects.filter(o=>o.id==='ball')];}
+function freeGroundOwner(){if(!bench.free?.earth)return null;return electricalConductors().find(c=>c.uid===bench.free.groundId);}
 function freeGap(a,b){
  const material=[a,b].find(o=>o.base===undefined&&o.id!=='ball');
  if(material){const c=material===a?b:a,p=freeEndpoint(c),dx=Math.abs(p.x-material.x)-76,dy=Math.abs(p.y-material.y)-36;return Math.hypot(Math.max(dx,0),Math.max(dy,0))+Math.min(Math.max(dx,dy),0)-24-freeRadius(c);}
@@ -451,8 +440,12 @@ function removeFreeConductor(uid){
 }
 function placeFreeSource(o,x,y){
  o.x=clamp(x,75,825);o.y=clamp(y,105,390);
- for(let pass=0;pass<3;pass++)for(const c of freeConductors()){
+ const obstacles=[...freeConductors(),...bench.objects.filter(v=>v.id==='ball'&&v!==o)];
+ for(let pass=0;pass<3;pass++)for(const c of obstacles){
   const gap=freeGap(c,o);if(gap>=0)continue;const ox=o.x,oy=o.y;o.x+=.1;const gx=(freeGap(c,o)-gap)/.1;o.x=ox;o.y+=.1;const gy=(freeGap(c,o)-gap)/.1;o.y=oy;const norm=Math.hypot(gx,gy)||1;o.x=clamp(o.x-gx/norm*gap,75,825);o.y=clamp(o.y-gy/norm*gap,105,390);
+ } if(o.id==='ball'&&obstacles.some(c=>freeGap(c,o)<-1)){
+  const initial={x:o.x,y:o.y},choices=[];for(const c of obstacles){const p=freeCenter(c);for(let j=0;j<32;j++){const angle=j*Math.PI/16,x=p.x+(c.r+65+.5)*Math.cos(angle),y=p.y+(c.r+65+.5)*Math.sin(angle);if(x<75||x>825||y<105||y>390)continue;const saved={x:o.x,y:o.y};o.x=x;o.y=y;if(obstacles.every(other=>freeGap(other,o)>=-1))choices.push({x,y,d:Math.hypot(x-initial.x,y-initial.y)});Object.assign(o,saved);}}
+  choices.sort((a,b)=>a.d-b.d);if(choices.length){o.x=choices[0].x;o.y=choices[0].y;}
  }
 }
 function moveFreeConductor(c,x,y){
@@ -465,6 +458,7 @@ function moveFreeConductor(c,x,y){
 function freePairs(){
  const list=[];for(const c of freeConductors())for(const o of bench.objects)if(freeTouch(c,o))list.push({a:c,b:o});
  const cs=freeConductors();for(let i=0;i<cs.length;i++)for(let j=i+1;j<cs.length;j++)if(freeTouch(cs[i],cs[j]))list.push({a:cs[i],b:cs[j]});
+ const balls=bench.objects.filter(o=>o.id==='ball');for(const a of balls)for(const b of bench.objects.filter(o=>o.id!=='ball'))if(freeTouch(a,b))list.push({a,b});for(let i=0;i<balls.length;i++)for(let j=i+1;j<balls.length;j++)if(freeTouch(balls[i],balls[j]))list.push({a:balls[i],b:balls[j]});
  return list;
 }
 function changeFreeElectrons(owner,delta){if(owner==='earth')bench.earth-=delta;else owner.e+=delta;}
@@ -538,7 +532,7 @@ function freePointerDown(e){
 }
 function endFreeDrag(){
  if(bench.drag?.type==='free-clip'){
-  const c=freeConductors().find(c=>{const p=freeTerminal(c);return Math.hypot(p.x-bench.cable.x,p.y-bench.cable.y)<44;});
+  const c=electricalConductors().find(c=>{const p=freeTerminal(c);return Math.hypot(p.x-bench.cable.x,p.y-bench.cable.y)<44;});
   bench.free.groundId=c?.uid||null;if(c)bench.cable=freeTerminal(c);
  }
  bench.drag=null;syncFreeBench();renderFreeBench();
@@ -579,13 +573,12 @@ function drawFreeScope(c){
  freeRemoveHandle(g,c,92,-55);return g;
 }
 function drawFreeSphere(c){
- const g=el('g',{'data-conductor':c.uid,'data-target-sphere':true,'data-net-charge':freeCharge(c),transform:`translate(${c.x} ${c.y})`,tabindex:0,role:'button','aria-label':'可移動目標金屬球，'+chargeLabel(freeCharge(c)),class:'benchObject'}),field={x:0,y:0};
- for(const o of [...bench.objects,...freeConductors()]){if(o===c)continue;const a=freeEndpoint(o),dx=a.x-c.x,dy=a.y-c.y,d=Math.hypot(dx,dy)||1,k=freeOwnerCharge(o)*clamp((155-freeGap(c,o))/180,0,.85)/8;field.x+=k*dx/d;field.y+=k*dy/d;}
+ const g=el('g',{'data-conductor':c.uid,'data-target-sphere':true,'data-net-charge':freeCharge(c),transform:`translate(${c.x} ${c.y})`,tabindex:0,role:'button','aria-label':'導電金屬球（絕緣支架），可移動，'+chargeLabel(freeCharge(c)),class:'benchObject'});
  g.append(el('rect',{x:-16,y:c.r-3,width:32,height:55,fill:'#bac8bf'}),el('circle',{r:c.r,fill:'#dae7e5',stroke:'#638783','stroke-width':3}));
- if(state.show){ionSlots.forEach((pos,i)=>chargeText(g,pos.x,pos.y,true,{'data-sphere-ion':i,'data-conductor-ion':c.uid,'data-charge-weight':1}));
-  for(let i=0;i<c.e;i++){const row=i%6,col=Math.floor(i/6),x=(col-.5)*38+clamp(field.x,-1,1)*42,y=(row-2.5)*24+clamp(field.y,-1,1)*24;const m=chargeText(g,x,y,false,{'data-sphere-electron':i,'data-charge-weight':Math.min(1,c.e-i),opacity:Math.min(1,c.e-i)});m.querySelector('circle').setAttribute('r',6);m.querySelector('text').style.fontSize='11px';}
+ if(state.show){ionSlots.forEach((pos,i)=>chargeText(g,pos.x,pos.y,true,{'data-sphere-ion':i,'data-metal-ion':'sphere:'+c.uid,'data-conductor-ion':c.uid,'data-charge-weight':1}));
+  drawMetalElectronCloud(g,c);
  }
- g.append(el('text',{x:0,y:-c.r-28,class:'benchLabel','data-target-charge':freeCharge(c)},'目標金屬球 · '+chargeLabel(freeCharge(c))));freeRemoveHandle(g,c,c.r+10,-c.r+10);return g;
+ g.append(el('text',{x:0,y:-c.r-28,class:'benchLabel','data-target-charge':freeCharge(c)},'金屬球 · '+chargeLabel(freeCharge(c))));g.append(el('text',{x:0,y:c.r+77,'text-anchor':'middle','font-size':16,fill:'#54706c'},'絕緣支架'));freeRemoveHandle(g,c,c.r+10,-c.r+10);return g;
 }
 function renderFreeBench(){
  if(state.mode!=='induction'||!bench.free)return;syncFreeBench();const svg=$('exploreSvg'),focus=document.activeElement?.dataset.conductor,internalNodes=new Map([...svg.querySelectorAll('[data-internal-electron]')].map(e=>[e.dataset.internalFlight,e])),externalNode=svg.querySelector('#singleElectron');svg.setAttribute('viewBox','0 0 900 540');svg.replaceChildren();
@@ -597,14 +590,14 @@ function renderFreeBench(){
  const eg=el('g',{'data-free-earth':true,transform:`translate(${earth.x} ${earth.y})`,tabindex:0,role:'button','aria-label':'大地與接地線，可拖動或刪除',class:'benchObject'});eg.append(el('rect',{x:-40,y:-15,width:80,height:77,rx:12,fill:'#e3eee1',stroke:'#73a08b','stroke-width':2}),el('path',{d:'M0 0v17m-22 0h44m-16 9h24m-18 9h12',stroke:'#368069','stroke-width':4,fill:'none'}),el('text',{x:0,y:58,'text-anchor':'middle','font-size':16,fill:'#355d59'},'大地'));
  const del=el('g',{'data-earth-remove':true,transform:'translate(43 -18)',tabindex:0,role:'button','aria-label':'刪除大地／接地線'});del.append(el('circle',{r:25,fill:'transparent','pointer-events':'all'}),el('circle',{r:13,fill:'#fffdf6',stroke:'#966c5a'}),el('text',{x:0,y:1,'text-anchor':'middle','dominant-baseline':'central','font-size':22,fill:'#8e4537'},'×'));eg.append(del);svg.append(eg);}
 
- if(bench.free.earth)for(const c of freeConductors()){const t=freeTerminal(c);svg.append(el('circle',{cx:t.x,cy:t.y,r:13,fill:'#fff',stroke:'#368069','stroke-width':3,'data-terminal':c.uid}));}
- if(bench.free.earth){const clip=el('g',{'data-clip':true,transform:`translate(${end.x} ${end.y})`,tabindex:0,role:'button','aria-label':'拖綠夾到接點接地，拖開斷地',class:'groundClip'});clip.append(el('circle',{r:30,fill:'transparent','pointer-events':'all'}),el('circle',{r:21,fill:'#e1f2dd',stroke:'#368069','stroke-width':3}),el('path',{d:'M-9 -10L9 10M9 -10L-9 10',stroke:'#368069','stroke-width':4}));svg.append(clip);}
  for(const o of bench.objects)svg.append(drawObject(o));
+ if(bench.free.earth)for(const c of electricalConductors()){const t=freeTerminal(c);svg.append(el('circle',{cx:t.x,cy:t.y,r:13,fill:'#fff',stroke:'#368069','stroke-width':3,'data-terminal':c.uid}));}
+ if(bench.free.earth){const clip=el('g',{'data-clip':true,transform:`translate(${end.x} ${end.y})`,tabindex:0,role:'button','aria-label':'拖綠夾到接點接地，拖開斷地',class:'groundClip'});clip.append(el('circle',{r:30,fill:'transparent','pointer-events':'all'}),el('circle',{r:21,fill:'#e1f2dd',stroke:'#368069','stroke-width':3}),el('path',{d:'M-9 -10L9 10M9 -10L-9 10',stroke:'#368069','stroke-width':4}));svg.append(clip);}
  if(state.show)for(const c of freeConductors()){if(c.internal){const f=c.internal,pos=scopeInternalPosition(c),g=internalNodes.get(String(f.id))||makeInternalElectron(c);g.setAttribute('transform',`translate(${pos.x} ${pos.y})`);g.dataset.progress=String(f.progress);g.dataset.internalDirection=f.dir*(f.returning?-1:1)>0?'leaf-to-cap':'cap-to-leaf';svg.append(g);}}
  if(bench.flight&&state.show){const p=freeFlightPosition(performance.now()),id=String(bench.flight.id),g=externalNode?.dataset.externalFlight===id?externalNode:el('g',{id:'singleElectron','data-external-flight':id});if(!g.childNodes.length){chargeText(g,0,0,false);g.append(el('text',{x:0,y:-20,'font-size':14,fill:'#176bb5'},Number(bench.flight.amount.toFixed(4))+' 格'));}g.setAttribute('transform',`translate(${p.x} ${p.y})`);svg.append(g);}
  if(focus)svg.querySelector(`[data-conductor="${focus}"]`)?.focus({preventScroll:true});
  const selected=String(bench.selected||'');$('removeSelected').disabled=!(bench.objects.some(o=>o.uid===bench.selected)||freeConductors().some(c=>'conductor:'+c.uid===selected)||(selected==='earth'&&!!bench.free.earth));
- $('benchRead').textContent=[...bench.objects.map(o=>kind(o.id).name+'：'+chargeLabel(objectCharge(o))),...freeConductors().map(c=>(c.type==='scope'?'驗電器':'目標球')+'：'+chargeLabel(freeCharge(c))+(owner===c?'（接地中）':'')),bench.free.earth?'大地：'+chargeLabel(bench.earth):'尚未加入大地','守恆核對：'+Number((freeSystemCharge()-bench.importedCharge).toFixed(6))+' 格'].join('\n');
+ $('benchRead').textContent=[...bench.objects.map(o=>kind(o.id).name+'：'+chargeLabel(objectCharge(o))+(owner===o?'（接地中）':'')),...freeConductors().map(c=>(c.type==='scope'?'驗電器':'金屬球（絕緣支架）')+'：'+chargeLabel(freeCharge(c))+(owner===c?'（接地中）':'')),bench.free.earth?'大地：'+chargeLabel(bench.earth):'尚未加入大地','守恆核對：'+Number((freeSystemCharge()-bench.importedCharge).toFixed(6))+' 格'].join('\n');
  $('status').textContent=!bench.objects.length&&!freeConductors().length&&!bench.free.earth?'桌面是空的，從右側拖入材料、導體或大地開始。':bench.flight?'電子沿實際接觸或接地路徑逐格轉移；分開即取消未完成轉移。':freeConductors().some(c=>c.internal)?'帽、導桿與金箔間的電子正逐格重分布；張角跟隨目前兩葉電荷。':owner?'接地中：先斷地再移開來源可留下異號電；先移開則電子回流。':bench.message||'靠近先觀察感應；接觸才轉移。金箔張開不一定代表驗電器有淨電荷。';
 }
 Object.assign(window.directBench,{freeCharge,freeField,freeLeafState,freeSystemCharge,freeCenter,freeTerminal});
@@ -646,3 +639,63 @@ function makeInternalElectron(c){
  g.append(el('circle',{r:10,fill:'#146cbd',stroke:'#fff','stroke-width':2}),el('text',{x:0,y:1,'text-anchor':'middle','dominant-baseline':'central','font-size':17,fill:'#fff'},'−'),el('text',{x:14,y:-12,'font-size':12,fill:'#14538b'},'電子'));return g;
 }
 Object.assign(window.directBench,{scopeInternalGoal,scopeInternalPosition,freeGroundTarget,integerContactTarget});
+
+
+// First-order, qualitative polarization of all spherical conductors. Net charge
+// and fixed positive ions are independent of this position-only visualization.
+function metalVisualizationNodes(){
+ const nodes=bench.objects.filter(o=>o.id==='ball').map(o=>({key:'ball:'+o.uid,owner:o,x:o.x,y:o.y,r:65*scaleBench(),q:objectCharge(o),e:o.e-(bench.flight?.from===o&&!bench.flight.reserved?(bench.flight.amount||1):0),ions:Array.from({length:6},(_,i)=>({x:45/65*Math.cos(i*Math.PI/3),y:45/65*Math.sin(i*Math.PI/3)}))}));
+ if(state.mode==='induction')for(const c of freeConductors().filter(c=>c.type==='sphere'))nodes.push({key:'sphere:'+c.uid,owner:c,x:c.x,y:c.y,r:c.r,q:freeCharge(c),e:c.e,ions:ionSlots.map(p=>({x:p.x/c.r,y:p.y/c.r}))});
+ if(state.mode==='quiz'){const s=sphere();nodes.push({key:'quiz-target',owner:'quiz-target',x:s.x,y:s.y,r:s.r,q:12-bench.electrons,e:bench.electrons-(bench.flight?.from==='sphere'?(bench.flight.amount||1):0),ions:ionSlots.map(p=>({x:p.x/105,y:p.y/100}))});}
+ return nodes;
+}
+function metalVisualizationSources(){
+ const sources=bench.objects.filter(o=>o.id!=='ball').map(o=>({x:o.x,y:o.y,r:halfSize(o),q:objectCharge(o)}));
+ if(state.mode==='induction')for(const c of freeConductors().filter(c=>c.type==='scope')){const f=freeLeafState(c),a=f.angle*Math.PI/180;sources.push({x:c.x,y:c.y-85,r:30,q:f.cap});for(const side of [-1,1])sources.push({x:c.x+side*(3*Math.cos(a)+60*Math.sin(a)),y:c.y+20+60*Math.cos(a)-3*Math.sin(a),r:10,q:f.leafCharges[side<0?0:1]});}
+ return sources;
+}
+function metalPolarization(){
+ const nodes=metalVisualizationNodes(),sources=metalVisualizationSources(),base=nodes.map(n=>{
+  let x=0,y=0;for(const other of [...nodes,...sources]){if(other===n||!other.q)continue;const dx=other.x-n.x,dy=other.y-n.y,d=Math.hypot(dx,dy);if(d<1)continue;const gap=d-n.r-other.r,envelope=clamp((220-gap)/150,0,1),strength=other.q/6*Math.min(2,((n.r+other.r+80)/d)**2)*envelope;x+=strength*dx/d;y+=strength*dy/d;}
+  return{x,y};
+ });
+ let vectors=base.map(v=>({...v}));
+ // Weak induced-dipole feedback makes a neutral conductor affect its charged
+ // neighbour too. Damping and a bounded response avoid runaway visual feedback.
+ for(let step=0;step<6;step++)vectors=nodes.map((n,i)=>{
+  let x=base[i].x,y=base[i].y;nodes.forEach((o,j)=>{if(i===j)return;const dx=n.x-o.x,dy=n.y-o.y,d=Math.hypot(dx,dy);if(d<1)return;const gap=d-n.r-o.r,k=.12*((n.r+o.r)/Math.max(d,n.r+o.r))**3*clamp((220-gap)/150,0,1),ux=dx/d,uy=dy/d,dot=vectors[j].x*ux+vectors[j].y*uy;x+=k*(3*dot*ux-vectors[j].x);y+=k*(3*dot*uy-vectors[j].y);});
+  const norm=Math.hypot(x,y);if(norm>1){x/=norm;y/=norm;}return{x:.7*x+.3*vectors[i].x,y:.7*y+.3*vectors[i].y};
+ });
+ return nodes.map((node,i)=>{const v=vectors[i],norm=Math.hypot(v.x,v.y);return{node,vector:norm<1e-5?{x:0,y:0}:v,strength:norm<1e-5?0:1-Math.exp(-5*norm)};});
+}
+function metalCandidateSites(node){
+ const small=node.r<80,step=(small?12:13)/node.r,limit=1-12/node.r,points=[];for(let y=-Math.floor(limit/step);y<=Math.floor(limit/step);y++)for(let x=-Math.floor(limit/step);x<=Math.floor(limit/step);x++){const p={x:x*step,y:y*step};if(Math.hypot(p.x,p.y)>limit)continue;if(node.ions.some(o=>Math.hypot(p.x-o.x,p.y-o.y)<15/node.r))continue;points.push(p);}return points;
+}
+function metalUniformSites(node,count,candidates){
+ const out=[],used=[],cols=Math.ceil(Math.sqrt(count)),rows=Math.ceil(count/cols),raw=Array.from({length:count},(_,i)=>({x:i%cols-(cols-1)/2,y:Math.floor(i/cols)-(rows-1)/2})),mean={x:raw.reduce((v,p)=>v+p.x,0)/count,y:raw.reduce((v,p)=>v+p.y,0)/count};
+ const max=Math.max(1,...raw.map(p=>Math.hypot(p.x-mean.x,p.y-mean.y))),min=12/node.r;
+ if(count%2){out.push({x:0,y:0});used.push({x:0,y:0});}
+ for(let i=0;i<Math.floor(count/2);i++){
+  const a=raw[i],b=raw[count-1-i],ideal={x:(a.x-b.x)/2/max*1.15,y:(a.y-b.y)/2/max*1.15};
+  const options=candidates.filter(p=>Math.hypot(p.x,p.y)*2>=min&&used.every(o=>Math.hypot(p.x-o.x,p.y-o.y)>=min&&Math.hypot(-p.x-o.x,-p.y-o.y)>=min));
+  options.sort((a,b)=>(a.x-ideal.x)**2+(a.y-ideal.y)**2-((b.x-ideal.x)**2+(b.y-ideal.y)**2));const p=options[0]||{x:ideal.x,y:ideal.y};out.push({...p},{x:-p.x,y:-p.y});used.push({...p},{x:-p.x,y:-p.y});
+ }
+ return out;
+}
+function metalMarkerWeights(node){
+ const n=Math.round(node.e),small=node.r<80,center=small?(n%2?1:n%4===2?2:0):n%2,weights=center?[center]:[];let remaining=n-center;
+ if(small&&remaining%4===2){weights.push(1,1);remaining-=2;}
+ const pairWeight=small?2:1;while(remaining>0){weights.push(pairWeight,pairWeight);remaining-=2*pairWeight;}return weights;
+}
+function metalElectronDistribution(owner){
+ const fields=metalPolarization(),field=fields.find(f=>f.node.owner===owner||f.node.key===owner);if(!field)return{node:null,positions:[],centroid:{x:0,y:0},vector:{x:0,y:0},strength:0};
+ const {node,vector,strength}=field,weights=metalMarkerWeights(node),count=weights.length,candidates=metalCandidateSites(node),uniform=metalUniformSites(node,count,candidates),norm=Math.hypot(vector.x,vector.y),u=norm?{x:vector.x/norm,y:vector.y/norm}:{x:1,y:0},v={x:-u.y,y:u.x},used=[];
+ const normalized=strength===0?uniform:uniform.map(p=>{const along=p.x*u.x+p.y*u.y,across=p.x*v.x+p.y*v.y,ideal={x:u.x*(along*(1-.72*strength)+.62*strength)+v.x*across*(1-.3*strength),y:u.y*(along*(1-.72*strength)+.62*strength)+v.y*across*(1-.3*strength)};const choices=candidates.filter(p=>used.every(o=>Math.hypot(p.x-o.x,p.y-o.y)>=12/node.r));choices.sort((a,b)=>(a.x-ideal.x)**2+(a.y-ideal.y)**2-((b.x-ideal.x)**2+(b.y-ideal.y)**2));const point=choices[0]||p;used.push(point);return point;});
+ const positions=normalized.map((p,i)=>({x:p.x*node.r,y:p.y*node.r,weight:weights[i]})),centroid={x:positions.reduce((n,p)=>n+p.x*p.weight,0)/Math.max(1,node.e),y:positions.reduce((n,p)=>n+p.y*p.weight,0)/Math.max(1,node.e)};
+ return{node,positions,centroid,vector,strength,uniform:strength===0};
+}
+function drawMetalElectronCloud(g,owner){
+ const d=metalElectronDistribution(owner);if(!d.node)return;const cloud=el('g',{'data-metal-cloud':d.node.key,'data-represented-electrons':d.node.e,'data-field-x':d.vector.x,'data-field-y':d.vector.y,'data-polarization':d.strength,'data-electron-centroid-x':d.centroid.x,'data-electron-centroid-y':d.centroid.y});
+ d.positions.forEach((p,i)=>{const m=chargeText(cloud,p.x,p.y,false,{'data-metal-electron':d.node.key,'data-electron-index':i,'data-charge-weight':p.weight,opacity:d.node.r<80?p.weight/2:1});m.querySelector('circle').setAttribute('r',5.5);m.querySelector('text').style.fontSize='10px';});g.append(cloud);
+}
+Object.assign(window.directBench,{metalVisualizationNodes,metalPolarization,metalElectronDistribution,electricalConductors});
