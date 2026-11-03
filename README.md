@@ -1,4 +1,4 @@
-# 電荷實驗室 v7.5
+# 電荷實驗室 v7.5.1
 
 國中靜電與庫倫定律教具：https://hikaruhen.github.io/staticElectricity/
 

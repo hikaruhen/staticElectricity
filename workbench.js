@@ -739,7 +739,12 @@ function advanceMetalMotion(t){
 function drawWholeMetalForces(svg){
  const forces=wholeMetalForces();for(const [o,f]of forces){
   const magnitude=Math.hypot(f.x,f.y);if(magnitude<1e-5)continue;
-  const ux=f.x/magnitude,uy=f.y/magnitude,x=clamp(o.x,65,835),y=clamp(o.y+freeRadius(o)+52,120,455),length=68*(.45+.55*(1-Math.exp(-magnitude))),tx=x+ux*length,ty=y+uy*length;
+  const ux=f.x/magnitude,uy=f.y/magnitude,x=clamp(o.x,65,835),length=68*(.45+.55*(1-Math.exp(-magnitude)));
+  // Keep the source force label clear of its name/q at local y=94. If the
+  // lower annotation cannot fit, place it above the sphere, never across q.
+  let y=clamp(o.y+freeRadius(o)+52,120,455);
+  if(o.id==='ball'){y=Math.max(o.y+o.r+92,o.y+130-Math.min(0,uy*length));if(y+Math.max(0,uy*length)>520)y=o.y-o.r-86;}
+  const tx=x+ux*length,ty=y+uy*length;
   const g=el('g',{'data-whole-force-for':String(o.uid),'data-force-x':f.x,'data-force-y':f.y,'data-supported':o.id==='ball'?'false':'true','pointer-events':'none','aria-label':'整球電力，'+[...f.relations].join('、')+(o.id==='ball'?'':'，支架固定')});
   g.append(el('path',{d:`M${x} ${y}L${tx} ${ty}`,stroke:'#fff','stroke-width':10,'stroke-linecap':'round'}),el('path',{d:`M${x} ${y}L${tx} ${ty}M${tx-ux*12-uy*7} ${ty-uy*12+ux*7}L${tx} ${ty}L${tx-ux*12+uy*7} ${ty-uy*12-ux*7}`,fill:'none',stroke:'#ad4330','stroke-width':5,'stroke-linejoin':'round'}),el('text',{x,y:y-17,'text-anchor':'middle','font-size':18,fill:'#903b2b',stroke:'#f0f4ea','stroke-width':4,'paint-order':'stroke','data-whole-force-label':true},(o.id==='ball'?'電力：':'電力（支架固定）：')+(f.relations.size===1?[...f.relations][0]:'合力')));svg.append(g);
  }
